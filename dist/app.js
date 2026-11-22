@@ -516,7 +516,7 @@ function switchLead(switchNumber, portIndex, fibre = false) {
 const camGroup = new THREE.Group();
 scene.add(camGroup);
 function addCamera(id, point, dir, switchId, description) {
-  const isBullet = id === "G1" || id === "D2";
+  const isBullet = id === "G1" || id === "D2" || id === "K2";
   const lens = isBullet ? "4.0mm" : "2.8mm";
   const hfov = isBullet ? 79 : 103;
   const type = isBullet ? "bullet" : "dome";
