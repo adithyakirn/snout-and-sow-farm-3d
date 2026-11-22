@@ -4,7 +4,7 @@ import { treeData } from './tree-data.js';
 // Decorative planting only. Metres, registration and surveyed/planned objects
 // remain owned by app.js. Quality changes foliage detail, never tree locations.
 export const FOREST_SETTINGS = Object.freeze({
-  seed: 21741, density: 0.85, windStrength: 0.65, quality: 'auto',
+  seed: 21741, density: 1.0, windStrength: 0.65, quality: 'auto',
   palette: ['#203F35', '#315D43', '#56834B', '#8EAF60', '#C2CF82'],
 });
 export function seededRandom(seed) {
@@ -264,19 +264,122 @@ export function createForest(parent, exclusions = {}, options = {}) {
   };
   trunkMaterial.customProgramCacheKey = () => 'forest-anchored-wind-v1';
   const random = seededRandom(settings.seed), trees = [], lists = Array.from({length:8},()=>[]);
-  for (const [x,z,type,scale] of treeData) {
-    const roll = random(), variant = type===1 && random()<0.22 ? 7 : Math.floor(random()*7);
-    const small = type===3 ? 0.25 : type===2 ? 0.65 : 1;
-    const sx = scale*small*(0.83+random()*0.28), sy=scale*small*(0.85+random()*0.35);
-    const radius = variant===7 ? 4.2*sx : 6.2*sx;
-    if (roll>settings.density || !plantingAllowed(x,z,radius,exclusions)) continue;
-    if (trees.some(t=>Math.hypot(t.x-x,t.z-z)<(t.radius+radius)*0.57)) continue;
-    const t = {x,z,radius,variant,sx,sy,rotation:random()*Math.PI*2};
-    trees.push(t); lists[variant].push(t);
-    if (variant !== 7 && random() < 0.2) {
-      const bx=x+radius*0.42, bz=z-radius*0.25;
-      if(plantingAllowed(bx,bz,1.4,exclusions)) {
-        lists[(variant+2)%7].push({x:bx,z:bz,radius:1.4,variant:(variant+2)%7,sx:0.23,sy:0.15,rotation:random()*6.28});
+
+  // Fast 2D spatial hash grid for dense planting distance checks
+  const grid = new Map();
+  const cellSize = 16.0;
+  const gridKey = (x, z) => `${Math.floor(x / cellSize)},${Math.floor(z / cellSize)}`;
+
+  function isTooClose(x, z, radius, minFactor = 0.30) {
+    const cx = Math.floor(x / cellSize);
+    const cz = Math.floor(z / cellSize);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const cell = grid.get(`${cx + dx},${cz + dz}`);
+        if (!cell) continue;
+        for (let i = 0; i < cell.length; i++) {
+          const t = cell[i];
+          const distSq = (t.x - x) * (t.x - x) + (t.z - z) * (t.z - z);
+          const thresh = (t.radius + radius) * minFactor;
+          if (distSq < thresh * thresh) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function registerTree(t) {
+    trees.push(t);
+    lists[t.variant].push(t);
+    const key = gridKey(t.x, t.z);
+    let cell = grid.get(key);
+    if (!cell) {
+      cell = [];
+      grid.set(key, cell);
+    }
+    cell.push(t);
+  }
+
+  // 1. Primary tree candidates from surveyed coordinates
+  for (const [x, z, type, scale] of treeData) {
+    const roll = random(), variant = type === 1 && random() < 0.25 ? 7 : Math.floor(random() * 7);
+    const small = type === 3 ? 0.28 : type === 2 ? 0.68 : 1.0;
+    const sx = scale * small * (0.85 + random() * 0.28);
+    const sy = scale * small * (0.85 + random() * 0.35);
+    const radius = variant === 7 ? 3.8 * sx : 5.2 * sx;
+
+    if (roll > settings.density || !plantingAllowed(x, z, radius, exclusions)) continue;
+    if (isTooClose(x, z, radius, 0.30)) continue;
+
+    registerTree({ x, z, radius, variant, sx, sy, rotation: random() * Math.PI * 2 });
+
+    // Understory shrub / young tree beside larger trees for dense canopy depth
+    if (variant !== 7 && random() < 0.36) {
+      const a = random() * Math.PI * 2;
+      const d = radius * (0.35 + random() * 0.28);
+      const bx = x + Math.cos(a) * d, bz = z + Math.sin(a) * d;
+      const subVariant = (variant + 2) % 7;
+      if (plantingAllowed(bx, bz, 1.5, exclusions)) {
+        lists[subVariant].push({
+          x: bx,
+          z: bz,
+          radius: 1.5,
+          variant: subVariant,
+          sx: 0.32 + random() * 0.16,
+          sy: 0.26 + random() * 0.2,
+          rotation: random() * Math.PI * 2,
+        });
+      }
+    }
+  }
+
+  // 2. Dense Forest Infill across the entire surrounding landscape
+  const infillStep = 9.6;
+  for (let gx = -265; gx <= 265; gx += infillStep) {
+    for (let gz = -265; gz <= 265; gz += infillStep) {
+      const rx = gx + (random() - 0.5) * infillStep * 0.95;
+      const rz = gz + (random() - 0.5) * infillStep * 0.95;
+      const distCenter = Math.hypot(rx, rz);
+      if (distCenter > 275) continue;
+
+      const isPalm = random() < 0.18;
+      const variant = isPalm ? 7 : Math.floor(random() * 7);
+      const scale = 0.72 + random() * 0.55;
+      const sx = scale * (0.85 + random() * 0.28);
+      const sy = scale * (0.85 + random() * 0.36);
+      const radius = variant === 7 ? 3.8 * sx : 5.0 * sx;
+
+      if (!plantingAllowed(rx, rz, radius, exclusions)) continue;
+      if (isTooClose(rx, rz, radius, 0.32)) continue;
+
+      registerTree({
+        x: rx,
+        z: rz,
+        radius,
+        variant,
+        sx,
+        sy,
+        rotation: random() * Math.PI * 2,
+      });
+
+      // Occasional dense understory thicket
+      if (variant !== 7 && random() < 0.32) {
+        const subAngle = random() * Math.PI * 2;
+        const subDist = radius * 0.44;
+        const bx = rx + Math.cos(subAngle) * subDist;
+        const bz = rz + Math.sin(subAngle) * subDist;
+        const subVariant = (variant + 3) % 7;
+        if (plantingAllowed(bx, bz, 1.5, exclusions)) {
+          lists[subVariant].push({
+            x: bx,
+            z: bz,
+            radius: 1.5,
+            variant: subVariant,
+            sx: 0.3 + random() * 0.16,
+            sy: 0.25 + random() * 0.2,
+            rotation: random() * Math.PI * 2,
+          });
+        }
       }
     }
   }
