@@ -190,7 +190,9 @@ function building(id, name, p, w, d, description, indicative = false) {
     color: 0x8b8980,
     roughness: 1,
   });
-  box(w, 0.18, d, 0, 0.09, 0, slabMaterial, group);
+  const slab = box(w, 0.18, d, 0, 0.09, 0, slabMaterial, group);
+  slab.userData.id = id;
+  pickables.push(slab);
   const wallHeight = id === "shed-d" ? 0.2 : isShed ? 1.15 : h;
   for (const side of [-1, 1]) {
     box(
@@ -304,6 +306,8 @@ function building(id, name, p, w, d, description, indicative = false) {
   const roofMesh = new THREE.Mesh(roofGeometry, roofMaterial);
   roofMesh.castShadow = true;
   roofMesh.receiveShadow = true;
+  roofMesh.userData.id = id;
+  pickables.push(roofMesh);
   roofGroup.add(roofMesh);
   for (let x = -rw; x < rw; x += 0.8)
     line(
@@ -1694,20 +1698,94 @@ function select(id) {
       .join(" · ");
     $("detail-extra").append(list);
   }
+
+  const shedRouteMap = {
+    "shed-d": ["D1"],
+    "shed-c": ["C1", "C2"],
+    "shed-b": ["B1", "B2"],
+    "shed-a": ["A1", "A2", "A3", "A4", "G1", "fibre"],
+    kitchen: ["K1", "K2"],
+    "kitchen-room": ["K1"],
+    "medicine-room": ["K1"],
+    gate: ["G1", "K2"],
+    "us-a": ["us-a"],
+    "us-b": ["us-b"],
+    "dp-1": ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
+    network: ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
+  };
+
+  const isSwitch = id.startsWith("switch-");
+  const switchNumber = isSwitch ? Number(id.slice(-1)) : null;
+  const isShed = Boolean(shedRouteMap[id]);
+  const isTargeted = Boolean(cam || isSwitch || isShed);
+  const targetRoutes = cam
+    ? [id]
+    : isSwitch
+      ? routes
+          .filter((r) => r.switchIds.includes(switchNumber))
+          .map((r) => r.id)
+      : isShed
+        ? shedRouteMap[id]
+        : [];
+
+  if (isShed) {
+    const matchingRuns = routes.filter((r) => targetRoutes.includes(r.id));
+    if (matchingRuns.length > 0) {
+      const cableInfo = document.createElement("div");
+      cableInfo.className = "camera-spec-pill dome";
+      let html = `<strong>Connected Cables (${matchingRuns.length} run${matchingRuns.length > 1 ? "s" : ""})</strong><br>`;
+      html += matchingRuns
+        .map((r) => {
+          const c = cameras.find((cam) => cam.id === r.id);
+          const name = c
+            ? `CAM ${c.id} (${c.shortTitle || c.lens})`
+            : r.id === "fibre"
+              ? "Armoured Singlemode Fibre Backbone"
+              : `Provision Stub ${r.id}`;
+          return `• ${name} ≈ ${Math.round(r.length)}m`;
+        })
+        .join("<br>");
+      cableInfo.innerHTML = html;
+      $("detail-extra").append(cableInfo);
+    }
+
+    const shedCams = cameras.filter((c) => targetRoutes.includes(c.id));
+    for (const c of shedCams) {
+      const isBullet = c.type === "bullet";
+      const viewBtn = document.createElement("button");
+      viewBtn.className = "primary camera-view-action-btn";
+      viewBtn.textContent = `View CAM ${c.id} (${c.shortTitle || c.id})`;
+      viewBtn.onclick = () => enterCameraView(c.id);
+      $("detail-extra").append(viewBtn);
+    }
+  }
+
   $("focus").disabled = !entry;
   for (const r of routes) {
-    const switchNumber = id.startsWith("switch-") ? Number(id.slice(-1)) : null;
-    const highlight = cam
-      ? r.id === id
-      : switchNumber
-        ? r.switchIds.includes(switchNumber)
-        : true;
-    r.materials[0].opacity = highlight ? 0.9 : 0.15;
-    r.materials[1].opacity = highlight ? 1 : 0.25;
-    r.materials[0].linewidth = highlight && cam ? 11 : 8;
-    r.materials[1].linewidth = highlight && cam ? 6 : 4;
+    const highlight = isTargeted ? targetRoutes.includes(r.id) : true;
+    if (isTargeted) {
+      r.materials[0].opacity = highlight ? 1.0 : 0.08;
+      r.materials[1].opacity = highlight ? 1.0 : 0.12;
+      r.materials[0].linewidth = highlight ? 11 : 4.5;
+      r.materials[1].linewidth = highlight ? 6 : 2;
+      if (r.obj.children[0])
+        r.obj.children[0].renderOrder = highlight ? 32 : 20;
+      if (r.obj.children[1])
+        r.obj.children[1].renderOrder = highlight ? 33 : 21;
+    } else {
+      r.materials[0].opacity = 0.85;
+      r.materials[1].opacity = 1.0;
+      r.materials[0].linewidth = 8;
+      r.materials[1].linewidth = 4;
+      if (r.obj.children[0]) r.obj.children[0].renderOrder = 20;
+      if (r.obj.children[1]) r.obj.children[1].renderOrder = 21;
+    }
   }
-  for (const l of labels) l.el.classList.toggle("selected", l.id === id);
+  for (const l of labels) {
+    const isSelected =
+      l.id === id || (isShed && shedRouteMap[id].includes(l.id));
+    l.el.classList.toggle("selected", isSelected);
+  }
   openPane("inspect");
 }
 $("selection").onchange = (e) => select(e.target.value);
@@ -1940,13 +2018,21 @@ renderer.domElement.addEventListener("pointerup", (e) => {
     return;
   }
   const hit = raycaster.intersectObjects(
-    pickables.filter(
-      (o) =>
-        o.visible &&
-        (o.userData.id.startsWith("switch-")
-          ? $("switches").checked
-          : $("camera-layer").checked),
-    ),
+    pickables.filter((o) => {
+      if (!o.visible) return false;
+      const targetId = o.userData?.id;
+      if (!targetId) return false;
+      if (targetId.startsWith("switch-")) return $("switches").checked;
+      if (
+        targetId.startsWith("shed-") ||
+        targetId === "kitchen" ||
+        targetId === "network"
+      ) {
+        return $("buildings").checked;
+      }
+      if (targetId === "dp-1") return true;
+      return $("camera-layer").checked;
+    }),
   )[0];
   if (hit) {
     const id = hit.object.userData.id;
