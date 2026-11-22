@@ -1242,6 +1242,9 @@ function closePane() {
   document
     .querySelectorAll("[data-pane]")
     .forEach((b) => b.classList.remove("active"));
+  if (selected !== "overview") {
+    select("overview", false);
+  }
 }
 function applyLayers() {
   environment.forestGroup.visible = $("trees").checked;
@@ -1664,7 +1667,7 @@ function setupCCTVDropdown() {
   });
 }
 
-function select(id) {
+function select(id, openDrawer = true) {
   selected = id;
   $("selection").value = id;
   const entry = entries.get(id),
@@ -1817,7 +1820,21 @@ function select(id) {
       l.id === id || (isShed && shedRouteMap[id].includes(l.id));
     l.el.classList.toggle("selected", isSelected);
   }
-  openPane("inspect");
+  if (openDrawer && id !== "overview") {
+    openPane("inspect");
+  } else if (!openDrawer && id === "overview") {
+    const panel = $("panel");
+    if (panel && !panel.classList.contains("collapsed")) {
+      panel.classList.add("collapsed");
+      $("panel-body").classList.add("hidden");
+      $("collapse").setAttribute("aria-expanded", "false");
+      document
+        .querySelectorAll("[data-pane]")
+        .forEach((b) => b.classList.remove("active"));
+    }
+  } else if (openDrawer && id === "overview") {
+    openPane("inspect");
+  }
 }
 $("selection").onchange = (e) => select(e.target.value);
 $("clear-selection").onclick = () => select("overview");
@@ -2075,6 +2092,11 @@ renderer.domElement.addEventListener("pointerup", (e) => {
     if (cameras.some((c) => c.id === id)) {
       enterCameraView(id);
     }
+  } else {
+    // Tapped anywhere outside the target area: unhighlight wires
+    if (selected !== "overview") {
+      select("overview", false);
+    }
   }
 });
 
@@ -2317,7 +2339,14 @@ window.addEventListener("keydown", (e) => {
       if (ddBtn) ddBtn.setAttribute("aria-expanded", "false");
       return;
     }
-    if (inCameraView) exitCameraView();
+    if (inCameraView) {
+      exitCameraView();
+      return;
+    }
+    if (selected !== "overview") {
+      select("overview", false);
+      return;
+    }
   } else if (inCameraView) {
     if (e.key === "ArrowLeft") stepCamera(-1);
     if (e.key === "ArrowRight") stepCamera(1);
