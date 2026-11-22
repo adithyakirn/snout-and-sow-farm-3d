@@ -228,137 +228,281 @@ export function createInteriors(buildings, scene) {
   }
   counts["shed-d"] = 1;
 
-  const sphere = new THREE.SphereGeometry(1, 10, 7);
+  const sphere = new THREE.SphereGeometry(1, 14, 10);
   const cube = new THREE.BoxGeometry(1, 1, 1);
-  const cone = new THREE.ConeGeometry(1, 1, 8);
-  const cylinder = new THREE.CylinderGeometry(1, 1, 1, 8);
-  const material = (color) =>
-    new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
-  const pink = material(0xd99893),
-    snout = material(0xc58280),
-    hoof = material(0x53494a);
-  const ivory = material(0xeee6d4),
-    gold = material(0xd4a43c),
-    red = material(0xb54736),
-    black = material(0x152326);
+  const cone = new THREE.ConeGeometry(1, 1, 10);
+  const cylinder = new THREE.CylinderGeometry(1, 1, 1, 10);
+  const ghibliMat = (color, emissive = 0x000000, emissiveIntensity = 0.08) =>
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.88,
+      metalness: 0.04,
+      emissive,
+      emissiveIntensity,
+    });
+
+  // Soft, warm Ghibli pig palette
+  const pigSkin = ghibliMat(0xfab5ad, 0x3d1b18, 0.12);
+  const pigBelly = ghibliMat(0xfde4df, 0x3d201c, 0.1);
+  const pigSnout = ghibliMat(0xf28b84, 0x401614, 0.14);
+  const pigNostril = ghibliMat(0xb3534e, 0x220000, 0.06);
+  const pigBlush = ghibliMat(0xf77970, 0x48100e, 0.22);
+  const pigHoof = ghibliMat(0x5e4840, 0x1a1210, 0.05);
+  const animeEye = ghibliMat(0x1a1311, 0x000000, 0);
+  const animeGlint = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+  // Soft, warm Ghibli chicken palette
+  const henFeather = ghibliMat(0xfdf7eb, 0x3d3018, 0.1);
+  const henBelly = ghibliMat(0xf7ecd2, 0x382810, 0.08);
+  const henComb = ghibliMat(0xe24334, 0x440808, 0.18);
+  const henWattle = ghibliMat(0xd83a2d, 0x3d0606, 0.16);
+  const henBeak = ghibliMat(0xf6b638, 0x3d2806, 0.1);
+
   const pigParts = [
+    // Chubby, rounded bean body
     {
       geometry: sphere,
-      material: pink,
-      position: [0, 0.57, 0],
-      scale: [0.31, 0.3, 0.59],
+      material: pigSkin,
+      position: [0, 0.55, 0],
+      scale: [0.35, 0.33, 0.61],
     },
+    // Creamy soft belly under-patch
     {
       geometry: sphere,
-      material: pink,
-      position: [0, 0.6, 0.52],
-      scale: [0.25, 0.24, 0.27],
+      material: pigBelly,
+      position: [0, 0.44, 0.03],
+      scale: [0.31, 0.26, 0.52],
+    },
+    // Round chubby head
+    {
+      geometry: sphere,
+      material: pigSkin,
+      position: [0, 0.61, 0.52],
+      scale: [0.28, 0.27, 0.3],
       head: true,
     },
+    // Adorable rosy anime blush cheeks
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: pigBlush,
+      position: [side * 0.24, 0.56, 0.6],
+      scale: [0.075, 0.065, 0.05],
+      head: true,
+    })),
+    // Soft rounded snout button
     {
       geometry: cylinder,
-      material: snout,
-      position: [0, 0.57, 0.76],
-      scale: [0.15, 0.1, 0.15],
+      material: pigSnout,
+      position: [0, 0.56, 0.79],
+      scale: [0.15, 0.09, 0.13],
       rotation: [Math.PI / 2, 0, 0],
       head: true,
     },
+    // Two cute nostril depressions
     ...[-1, 1].map((side) => ({
-      geometry: cone,
-      material: pink,
-      position: [side * 0.16, 0.87, 0.49],
-      scale: [0.12, 0.24, 0.08],
-      rotation: [0, 0, side * 0.45],
+      geometry: sphere,
+      material: pigNostril,
+      position: [side * 0.048, 0.56, 0.84],
+      scale: [0.024, 0.032, 0.018],
       head: true,
     })),
+    // Charming floppy leaf ears with inner rose shading
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: pigSkin,
+      position: [side * 0.2, 0.82, 0.49],
+      scale: [0.11, 0.18, 0.05],
+      rotation: [0.42, side * 0.32, side * 0.48],
+      head: true,
+      earWiggle: side,
+    })),
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: pigSnout,
+      position: [side * 0.19, 0.81, 0.5],
+      scale: [0.075, 0.13, 0.03],
+      rotation: [0.42, side * 0.32, side * 0.48],
+      head: true,
+    })),
+    // Big expressive anime eyes with white catchlight glints
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: animeEye,
+      position: [side * 0.19, 0.68, 0.69],
+      scale: [0.036, 0.042, 0.034],
+      head: true,
+    })),
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: animeGlint,
+      position: [side * 0.2 + 0.007, 0.698, 0.71],
+      scale: [0.014, 0.015, 0.014],
+      head: true,
+    })),
+    // Stumpy chubby legs
     ...[-1, 1].flatMap((side) =>
       [-1, 1].map((end) => ({
-        geometry: cube,
-        material: hoof,
-        position: [side * 0.2, 0.22, end * 0.36],
-        scale: [0.11, 0.33, 0.13],
+        geometry: cylinder,
+        material: pigSkin,
+        position: [side * 0.21, 0.28, end * 0.33],
+        scale: [0.082, 0.22, 0.085],
         stride: side * end,
       })),
     ),
-    ...[-1, 1].map((side) => ({
-      geometry: sphere,
-      material: black,
-      position: [side * 0.18, 0.68, 0.69],
-      scale: [0.028, 0.028, 0.028],
-      head: true,
-    })),
+    // Warm earthy brown cloven hooves
+    ...[-1, 1].flatMap((side) =>
+      [-1, 1].map((end) => ({
+        geometry: cylinder,
+        material: pigHoof,
+        position: [side * 0.21, 0.13, end * 0.33 + 0.012],
+        scale: [0.085, 0.1, 0.09],
+        stride: side * end,
+      })),
+    ),
+    // Playful spiral curly tail with wag motion
     {
-      geometry: new THREE.TorusGeometry(0.08, 0.022, 5, 12, Math.PI * 1.6),
-      material: pink,
-      position: [0, 0.65, -0.61],
+      geometry: new THREE.TorusGeometry(0.085, 0.024, 6, 14, Math.PI * 1.7),
+      material: pigSkin,
+      position: [0, 0.64, -0.62],
       scale: [1, 1, 1],
       rotation: [0, Math.PI / 2, 0],
+      tailWag: true,
     },
   ];
   const chickenParts = [
+    // Rotund fluffy egg-body
     {
       geometry: sphere,
-      material: ivory,
-      position: [0, 0.42, 0],
-      scale: [0.19, 0.25, 0.28],
+      material: henFeather,
+      position: [0, 0.44, 0],
+      scale: [0.24, 0.28, 0.33],
     },
+    // Fluffy chest / bosom
     {
       geometry: sphere,
-      material: ivory,
-      position: [0, 0.66, 0.16],
-      scale: [0.09, 0.2, 0.1],
+      material: henBelly,
+      position: [0, 0.48, 0.09],
+      scale: [0.21, 0.22, 0.25],
+    },
+    // Neck & round head with pecking motion
+    {
+      geometry: sphere,
+      material: henFeather,
+      position: [0, 0.67, 0.16],
+      scale: [0.12, 0.22, 0.13],
       head: true,
+      peck: true,
     },
     {
       geometry: sphere,
-      material: ivory,
-      position: [0, 0.81, 0.21],
-      scale: [0.12, 0.12, 0.12],
+      material: henFeather,
+      position: [0, 0.82, 0.22],
+      scale: [0.14, 0.14, 0.15],
       head: true,
+      peck: true,
     },
+    // Scalloped 3-lobe rounded Ghibli comb
+    {
+      geometry: sphere,
+      material: henComb,
+      position: [0, 0.95, 0.26],
+      scale: [0.038, 0.065, 0.055],
+      head: true,
+      peck: true,
+    },
+    {
+      geometry: sphere,
+      material: henComb,
+      position: [0, 0.98, 0.2],
+      scale: [0.042, 0.085, 0.065],
+      head: true,
+      peck: true,
+    },
+    {
+      geometry: sphere,
+      material: henComb,
+      position: [0, 0.94, 0.13],
+      scale: [0.038, 0.07, 0.055],
+      head: true,
+      peck: true,
+    },
+    // Wattle droplets under chin
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: henWattle,
+      position: [side * 0.024, 0.71, 0.28],
+      scale: [0.024, 0.05, 0.028],
+      head: true,
+      peck: true,
+    })),
+    // Cute golden beak
     {
       geometry: cone,
-      material: gold,
-      position: [0, 0.79, 0.35],
-      scale: [0.05, 0.15, 0.05],
+      material: henBeak,
+      position: [0, 0.8, 0.37],
+      scale: [0.045, 0.13, 0.045],
       rotation: [Math.PI / 2, 0, 0],
       head: true,
+      peck: true,
     },
-    {
-      geometry: cone,
-      material: red,
-      position: [0, 0.96, 0.2],
-      scale: [0.05, 0.16, 0.09],
-      head: true,
-    },
+    // Inquisitive anime eyes with white catchlight glints
     ...[-1, 1].map((side) => ({
       geometry: sphere,
-      material: black,
-      position: [side * 0.1, 0.83, 0.26],
-      scale: [0.016, 0.016, 0.016],
+      material: animeEye,
+      position: [side * 0.11, 0.84, 0.27],
+      scale: [0.026, 0.028, 0.026],
       head: true,
+      peck: true,
     })),
     ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: animeGlint,
+      position: [side * 0.115 + 0.005, 0.852, 0.282],
+      scale: [0.011, 0.011, 0.011],
+      head: true,
+      peck: true,
+    })),
+    // Fluffy side wings with flapping motion
+    ...[-1, 1].map((side) => ({
+      geometry: sphere,
+      material: henFeather,
+      position: [side * 0.22, 0.46, -0.01],
+      scale: [0.065, 0.18, 0.24],
+      rotation: [0.1, 0, side * 0.15],
+      flap: side,
+    })),
+    // Fan tail feathers
+    {
+      geometry: cone,
+      material: henFeather,
+      position: [0, 0.62, -0.32],
+      scale: [0.14, 0.34, 0.09],
+      rotation: [-0.68, 0, 0],
+      tailWag: true,
+    },
+    ...[-1, 1].map((side) => ({
+      geometry: cone,
+      material: henFeather,
+      position: [side * 0.07, 0.58, -0.3],
+      scale: [0.09, 0.28, 0.07],
+      rotation: [-0.55, 0, side * 0.3],
+      tailWag: true,
+    })),
+    // Little golden shins & feet
+    ...[-1, 1].map((side) => ({
       geometry: cylinder,
-      material: gold,
-      position: [side * 0.075, 0.15, 0],
-      scale: [0.025, 0.28, 0.025],
+      material: henBeak,
+      position: [side * 0.08, 0.18, -0.02],
+      scale: [0.025, 0.24, 0.025],
       stride: side,
     })),
     ...[-1, 1].map((side) => ({
-      geometry: sphere,
-      material: ivory,
-      position: [side * 0.18, 0.44, -0.02],
-      scale: [0.06, 0.17, 0.22],
-      flap: side,
+      geometry: cube,
+      material: henBeak,
+      position: [side * 0.08, 0.05, 0.03],
+      scale: [0.08, 0.04, 0.12],
+      stride: side,
     })),
-    {
-      geometry: cone,
-      material: ivory,
-      position: [0, 0.58, -0.29],
-      scale: [0.14, 0.32, 0.1],
-      rotation: [-0.6, 0, 0],
-    },
   ];
 
   const speciesMeshes = [];
@@ -414,9 +558,13 @@ export function createInteriors(buildings, scene) {
         for (const { mesh, part } of meshes) {
           partPosition.fromArray(part.position);
           if (part.head) partPosition.y += Math.sin(phase * 3) * 0.025;
+          if (part.peck) partPosition.z += Math.sin(phase * 3) * 0.035;
           euler.set(...(part.rotation || [0, 0, 0]));
-          if (part.stride) euler.x += Math.sin(phase * 5) * 0.17 * part.stride;
-          if (part.flap) euler.z += Math.sin(phase * 4) * 0.12 * part.flap;
+          if (part.stride) euler.x += Math.sin(phase * 5) * 0.18 * part.stride;
+          if (part.flap) euler.z += Math.sin(phase * 4) * 0.15 * part.flap;
+          if (part.tailWag) euler.y += Math.sin(phase * 7) * 0.32;
+          if (part.earWiggle)
+            euler.z += Math.sin(phase * 4 + part.earWiggle) * 0.12;
           partRotation.setFromEuler(euler);
           partScale.fromArray(part.scale);
           partMatrix.compose(partPosition, partRotation, partScale);
