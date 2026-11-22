@@ -398,16 +398,11 @@ const network = building(
 // Door is drawn on the short entrance face of Shed C.
 box(0.12, 2.3, 2.2, -17.07, 1.15, 0, mats.dark, c.group);
 const gate = pos(294, 1565);
-for (const dx of [-2.5, 2.5])
-  box(0.4, 2, 0.4, gate.x + dx, 1, gate.z, mats.wall);
-for (let dx = -2.2; dx < 2.5; dx += 0.55)
-  box(0.08, 1.5, 0.09, gate.x + dx, 0.9, gate.z, mats.trim);
-box(5, 0.1, 0.1, gate.x, 1.65, gate.z, mats.trim);
-label("Gate", gate.clone().add(new THREE.Vector3(0, 4, 0)), "gate");
+label("Gate", gate.clone().add(new THREE.Vector3(0, 3.8, 0)), "gate");
 addEntry(
   "gate",
   "Gate",
-  "G1 is mounted beside Shed A and faces this gate. Connected to switch 2 on Shed A.",
+  "Main entrance gate to the farm compound. Monitored by both G1 (Shed A bullet camera) and K2 (Kitchen bullet camera).",
   gate,
 );
 const future = [];
@@ -418,13 +413,22 @@ for (const [id, name, p] of [
   const q = pos(...p),
     w = 25,
     depth = 6;
+  const angle = -0.13;
+  const cos = Math.cos(angle),
+    sin = Math.sin(angle);
   const corners = [
     [-w / 2, -depth / 2],
     [w / 2, -depth / 2],
     [w / 2, depth / 2],
     [-w / 2, depth / 2],
     [-w / 2, -depth / 2],
-  ].map(([x, z]) => new THREE.Vector3(q.x + x, 0.12, q.z + z));
+  ].map(([lx, lz]) =>
+    new THREE.Vector3(
+      q.x + (lx * cos - lz * sin),
+      0.12,
+      q.z + (lx * sin + lz * cos),
+    ),
+  );
   futureObjects.push(line(corners, 0x98cf87, 0.08, scene, true));
   label(name, q.clone().add(new THREE.Vector3(0, 1, 0)), id, "future");
   addEntry(
@@ -1845,6 +1849,13 @@ function draw(frameTime = 0) {
     const correction = boundedTarget.sub(controls.target);
     controls.target.add(correction);
     view.position.add(correction);
+
+    // Ghibli atmospheric zoom-out fog: veils the distant perimeter and trees when zoomed out
+    const camDist = view.position.distanceTo(controls.target);
+    const zoomOutFactor = THREE.MathUtils.clamp((camDist - 65) / 220, 0, 1);
+    scene.fog.near = THREE.MathUtils.lerp(240, 75, zoomOutFactor);
+    scene.fog.far = THREE.MathUtils.lerp(950, 440, zoomOutFactor);
+
     updateLabels();
   }
   renderer.render(scene, view);

@@ -282,17 +282,18 @@ export function createEnvironment(scene) {
     }
   }
 
-  // Farm Compound Yard (Warm Painterly Earth / Sandy Ochre)
-  ctx.fillStyle = "#dac199";
+  // Farm Compound Yard (Warm Painterly Earth / Sandy Ochre with Ghibli texture)
+  ctx.fillStyle = "#d8be94";
   ctx.beginPath();
   const compoundPts = [
-    [-32, 48],
-    [26, 48],
-    [28, -58],
-    [-15, -58],
-    [-33, -32],
-    [-33, 26],
-    [-32, 48],
+    [-30.5, 52.0],
+    [35.5, 52.0],
+    [35.5, 22.0],
+    [28.0, -51.5],
+    [-18.0, -51.5],
+    [-31.0, -26.0],
+    [-31.0, 30.0],
+    [-30.5, 52.0],
   ];
   const [fX, fZ] = toCanvas(compoundPts[0][0], compoundPts[0][1]);
   ctx.moveTo(fX, fZ);
@@ -303,88 +304,150 @@ export function createEnvironment(scene) {
   ctx.closePath();
   ctx.fill();
 
-  // Subtle warm dirt gradient variations
+  // Subtle warm dirt gradient variations (sunlit center, richer moist earth toward perimeter)
   const yardGrad = ctx.createRadialGradient(
-    ...toCanvas(0, -5),
-    10,
-    ...toCanvas(0, -5),
-    280,
+    ...toCanvas(3, 4),
+    15,
+    ...toCanvas(3, 4),
+    320,
   );
-  yardGrad.addColorStop(0, "rgba(240, 222, 192, 0.45)");
-  yardGrad.addColorStop(0.7, "rgba(215, 188, 150, 0.25)");
-  yardGrad.addColorStop(1, "rgba(180, 150, 114, 0.45)");
+  yardGrad.addColorStop(0, "rgba(244, 228, 198, 0.55)");
+  yardGrad.addColorStop(0.55, "rgba(222, 196, 156, 0.3)");
+  yardGrad.addColorStop(1, "rgba(172, 140, 102, 0.55)");
   ctx.fillStyle = yardGrad;
   ctx.fill();
 
-  // Access road leading from outside to Gate [-20, 36]
-  ctx.strokeStyle = "#d4b387";
-  ctx.lineWidth = (8 / worldSize) * 2048;
+  // Main access road leading from outside (-50, 120) through the labeled Gate (-23.9, 48.07) into courtyard
+  ctx.strokeStyle = "#cca97b";
+  ctx.lineWidth = (7.5 / worldSize) * 2048;
   ctx.lineCap = "round";
   ctx.beginPath();
-  const [gInX, gInZ] = toCanvas(-20, 36);
-  const [gOutX, gOutZ] = toCanvas(-50, 120);
-  ctx.moveTo(gInX, gInZ);
+  const [gGateX, gGateZ] = toCanvas(-23.895, 48.07);
+  const [gOutX, gOutZ] = toCanvas(-50.0, 120.0);
+  ctx.moveTo(gGateX, gGateZ);
   ctx.lineTo(gOutX, gOutZ);
   ctx.stroke();
 
-  // Internal pathways between sheds and working areas
+  // Gentle wheel tracks along the access road
+  ctx.strokeStyle = "rgba(168, 134, 94, 0.4)";
+  ctx.lineWidth = (1.1 / worldSize) * 2048;
+  for (const trackOffset of [-1.8, 1.8]) {
+    ctx.beginPath();
+    const [tInX, tInZ] = toCanvas(-23.895 + trackOffset * 0.8, 48.07 + trackOffset * 0.6);
+    const [tOutX, tOutZ] = toCanvas(-50.0 + trackOffset * 0.8, 120.0 + trackOffset * 0.6);
+    ctx.moveTo(tInX, tInZ);
+    ctx.lineTo(tOutX, tOutZ);
+    ctx.stroke();
+  }
+
+  // Courtyard service pathways connecting Sheds, Kitchen, Network room and the labeled Gate
   ctx.strokeStyle = "#cbb085";
-  ctx.lineWidth = (5.5 / worldSize) * 2048;
+  ctx.lineWidth = (5.0 / worldSize) * 2048;
   ctx.beginPath();
-  const [sAX, sAZ] = toCanvas(0, 36);
-  const [sDX, sDZ] = toCanvas(0, -46);
-  ctx.moveTo(sAX, sAZ);
-  ctx.lineTo(sDX, sDZ);
-  const [kX, kZ] = toCanvas(-23, 13.5);
-  const [mX, mZ] = toCanvas(14, 13.5);
-  ctx.moveTo(kX, kZ);
-  ctx.lineTo(mX, mZ);
-  const [nX, nZ] = toCanvas(-23, -10.5);
-  const [nmX, nmZ] = toCanvas(14, -10.5);
-  ctx.moveTo(nX, nZ);
-  ctx.lineTo(nmX, nmZ);
+  // Driveway from labeled Gate curving into courtyard and east towards Shed A and Kitchen
+  const [pGateX, pGateZ] = toCanvas(-23.895, 48.07);
+  const [pShedAFootX, pShedAFootZ] = toCanvas(-17.5, 34.0);
+  const [pSouthYardX, pSouthYardZ] = toCanvas(0.0, 44.0);
+  const [pKitchX, pKitchZ] = toCanvas(24.0, 42.8);
+  ctx.moveTo(pGateX, pGateZ);
+  ctx.lineTo(pShedAFootX, pShedAFootZ);
+  ctx.lineTo(pSouthYardX, pSouthYardZ);
+  ctx.lineTo(pKitchX, pKitchZ);
+  // Northward lane along west side of sheds to Network room and Shed C
+  const [pNetX, pNetZ] = toCanvas(-18.5, -11.4);
+  const [pShedCX, pShedCZ] = toCanvas(-13.0, -38.7);
+  ctx.moveTo(pShedAFootX, pShedAFootZ);
+  ctx.lineTo(pNetX, pNetZ);
+  ctx.lineTo(pShedCX, pShedCZ);
   ctx.stroke();
 
-  // Building foundation slabs (Smooth warm concrete with mossy edges)
-  const shedFootings = [
-    { x: 0, z: 28.9, w: 34, d: 19 },
-    { x: 1.2, z: 4.6, w: 30, d: 10 },
-    { x: 3.0, z: -18.1, w: 24, d: 8 },
-    { x: 3.1, z: -41.2, w: 34, d: 11 },
-    { x: -17.2, z: 13.5, w: 14, d: 8 },
-    { x: -18.6, z: -10.7, w: 14, d: 8 },
-  ];
-  for (const s of shedFootings) {
-    const [cx, cz] = toCanvas(s.x - s.w / 2 - 0.7, s.z - s.d / 2 - 0.7);
-    const [wPx, dPx] = [
-      ((s.w + 1.4) / worldSize) * 2048,
-      ((s.d + 1.4) / worldSize) * 2048,
-    ];
-    // Mossy border
-    ctx.fillStyle = "#557748";
-    ctx.fillRect(cx - 3, cz - 3, wPx + 6, dPx + 6);
-    // Concrete apron
-    ctx.fillStyle = "#9ba29f";
-    ctx.fillRect(cx, cz, wPx, dPx);
-    ctx.strokeStyle = "#808884";
+  // Helper: Draw concrete foundation apron precisely rotated to match 3D buildings
+  function drawRotatedApron(x, z, w, d, rot = -0.13, options = {}) {
+    const [cx, cz] = toCanvas(x, z);
+    const wPx = (w / worldSize) * 2048;
+    const dPx = (d / worldSize) * 2048;
+
+    ctx.save();
+    ctx.translate(cx, cz);
+    ctx.rotate(-rot); // In 2D canvas, Y is down so rotation -(-0.13) = +0.13 rad matches Three.js Y-rotation
+
+    // 1. Mossy earthen edge border (soft green/brown fringe)
+    ctx.fillStyle = options.edgeColor || "#507542";
+    const border = 5;
+    ctx.fillRect(-wPx / 2 - border, -dPx / 2 - border, wPx + border * 2, dPx + border * 2);
+
+    // 2. Concrete slab apron
+    ctx.fillStyle = options.slabColor || "#9ba29f";
+    ctx.fillRect(-wPx / 2, -dPx / 2, wPx, dPx);
+
+    // 3. Subtle slab edge expansion line
+    ctx.strokeStyle = options.jointColor || "#7c8480";
     ctx.lineWidth = 2;
-    ctx.strokeRect(cx, cz, wPx, dPx);
+    ctx.strokeRect(-wPx / 2, -dPx / 2, wPx, dPx);
+
+    // Center division line for long sheds
+    if (wPx > 70) {
+      ctx.beginPath();
+      ctx.moveTo(0, -dPx / 2);
+      ctx.lineTo(0, dPx / 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
-  // Inner lawn islands (fresh vibrant grass)
-  const lawns = [
-    { x: 8, z: 18, w: 12, d: 6 },
-    { x: -10, z: 18, w: 8, d: 6 },
-    { x: 8, z: -6, w: 12, d: 6 },
-    { x: -10, z: -6, w: 8, d: 6 },
-    { x: 8, z: -29, w: 12, d: 6 },
-    { x: -10, z: -29, w: 8, d: 6 },
-  ];
-  for (const l of lawns) {
-    const [cx, cz] = toCanvas(l.x - l.w / 2, l.z - l.d / 2);
-    ctx.fillStyle = "#4ea030";
-    ctx.fillRect(cx, cz, (l.w / worldSize) * 2048, (l.d / worldSize) * 2048);
+  // Exact 3D Building Foundations (position, size, and -0.13 rad rotation)
+  // Shed A: [0.0, 28.935], size 32x17 -> apron 34x19
+  drawRotatedApron(0.0, 28.935, 34.0, 19.0, -0.13);
+
+  // Shed B: [1.213, 4.667], size 28x8 -> apron 30x10
+  drawRotatedApron(1.213, 4.667, 30.0, 10.0, -0.13);
+
+  // Shed C: [5.414, -38.736], size 34x11 -> apron 36x13
+  drawRotatedApron(5.414, -38.736, 36.0, 13.0, -0.13);
+
+  // Shed D (chicken): [-1.773, -28.095], size 22x5 -> apron 24x7
+  drawRotatedApron(-1.773, -28.095, 24.0, 7.0, -0.13);
+
+  // Network / CCTV: [-22.508, -11.388], size 6x6 -> apron 8x8
+  drawRotatedApron(-22.508, -11.388, 8.0, 8.0, -0.13);
+
+  // Kitchen: [27.909, 42.843], size 9x6 -> apron 11.5x8.5
+  drawRotatedApron(27.909, 42.843, 11.5, 8.5, -0.13);
+
+  // US A & US B (Upcoming sheds): compacted gravel hardstand foundation pads
+  drawRotatedApron(-1.68, -8.307, 26.5, 7.5, -0.13, {
+    slabColor: "#b2ab9a",
+    edgeColor: "#6c6659",
+    jointColor: "#8e8677",
+  });
+  drawRotatedApron(-1.68, -17.548, 26.5, 7.5, -0.13, {
+    slabColor: "#b2ab9a",
+    edgeColor: "#6c6659",
+    jointColor: "#8e8677",
+  });
+
+  // Inner lawn islands (fresh vibrant grass aligned with -0.13 rad shed angle)
+  function drawRotatedLawn(x, z, w, d, rot = -0.13) {
+    const [cx, cz] = toCanvas(x, z);
+    const wPx = (w / worldSize) * 2048;
+    const dPx = (d / worldSize) * 2048;
+    ctx.save();
+    ctx.translate(cx, cz);
+    ctx.rotate(-rot);
+    ctx.fillStyle = "#49962e";
+    ctx.fillRect(-wPx / 2, -dPx / 2, wPx, dPx);
+    // Subtle interior highlight
+    ctx.fillStyle = "#5cb03c";
+    ctx.fillRect(-wPx / 2 + 3, -dPx / 2 + 3, wPx - 6, dPx - 6);
+    ctx.restore();
   }
+
+  // Lawns between buildings (parallel to sheds)
+  drawRotatedLawn(0.6, 16.8, 26.0, 6.5, -0.13);     // Between Shed A and Shed B
+  drawRotatedLawn(-0.2, -1.8, 24.0, 4.5, -0.13);     // Between Shed B and US A
+  drawRotatedLawn(-1.7, -22.8, 22.0, 3.5, -0.13);    // Between US B and Shed D
+  drawRotatedLawn(20.0, 10.0, 10.0, 16.0, -0.13);    // East courtyard lawn patch
 
   // Subtle organic canvas texture noise
   const imgData = ctx.getImageData(0, 0, 2048, 2048);
@@ -419,7 +482,9 @@ export function createEnvironment(scene) {
   groundGroup.add(groundMesh);
 
   // ==========================================================================
-  // 2. Ghibli 3D Compound Fence & Entrance Gate
+  // 2. Ghibli 3D Compound Fence & Single Main Entrance Gate
+  // Encloses entire farm (including Shed A and Kitchen).
+  // Only one single gate exists: the labeled Gate at pos(294, 1565) [-23.9, 48.07].
   // ==========================================================================
   const fenceGroup = new THREE.Group();
   groundGroup.add(fenceGroup);
@@ -432,13 +497,19 @@ export function createEnvironment(scene) {
     thresholds: [0.64, 0.36, 0.02],
   });
 
+  // Fence perimeter encloses Kitchen, Shed A, Network room, Shed C:
+  // Labeled Gate opening is between [-21.4, 48.07] and [-26.4, 48.07] (centered at -23.895, 48.07).
+  const gateX = -23.895;
+  const gateZ = 48.07;
+  const gateHalfW = 2.5;
+
   const fencePerimeter = [
-    [-17.5, 36.5],
-    [24, 36.5],
-    [24, -56],
-    [-29, -56],
-    [-29, 36.5],
-    [-22, 36.5],
+    [gateX + gateHalfW, gateZ], // Gate East pillar (-21.395, 48.07)
+    [34.5, gateZ],              // East along south boundary enclosing Kitchen
+    [34.5, -53.0],              // North along east boundary past Kitchen and Shed C
+    [-29.5, -53.0],             // West along north boundary past Shed C
+    [-29.5, gateZ],             // South along west boundary past Network room and Shed A
+    [gateX - gateHalfW, gateZ], // East along south boundary to Gate West pillar (-26.395, 48.07)
   ];
 
   for (let seg = 0; seg < fencePerimeter.length - 1; seg++) {
@@ -468,15 +539,15 @@ export function createEnvironment(scene) {
     }
   }
 
-  // Stone Pillars & Rustic Iron Entrance Gate
+  // Stone Pillars & Rustic Iron Gate at the single labeled Gate position (-23.895, 48.07)
   const pillarGeo = new THREE.BoxGeometry(0.75, 2.5, 0.75);
   const ghibliPillarMat = createGhibliMaterial({
     colors: ["#c5beb5", "#989086", "#6c655d", "#433e38"],
     thresholds: [0.65, 0.38, 0.0],
   });
-  for (const px of [-22, -17.5]) {
+  for (const px of [gateX - gateHalfW, gateX + gateHalfW]) {
     const pillar = new THREE.Mesh(pillarGeo, ghibliPillarMat);
-    pillar.position.set(px, 1.25, 36.5);
+    pillar.position.set(px, 1.25, gateZ);
     fenceGroup.add(pillar);
   }
 
@@ -485,19 +556,19 @@ export function createEnvironment(scene) {
     thresholds: [0.65, 0.35, -0.05],
   });
   for (const [side, px, angle] of [
-    [-1, -21.8, 0.35],
-    [1, -17.7, -0.35],
+    [-1, gateX - gateHalfW + 0.2, 0.4],
+    [1, gateX + gateHalfW - 0.2, -0.4],
   ]) {
     const leaf = new THREE.Group();
-    leaf.position.set(px, 0, 36.5);
+    leaf.position.set(px, 0, gateZ);
     leaf.rotation.y = angle;
     const frame = new THREE.Mesh(
-      new THREE.BoxGeometry(2.1, 1.6, 0.06),
+      new THREE.BoxGeometry(2.3, 1.6, 0.06),
       ghibliGateFrameMat,
     );
-    frame.position.set(side * 1.05, 1.0, 0);
+    frame.position.set(side * 1.15, 1.0, 0);
     leaf.add(frame);
-    for (let x = 0.15; x <= 1.95; x += 0.28) {
+    for (let x = 0.2; x <= 2.1; x += 0.3) {
       const picket = new THREE.Mesh(
         new THREE.CylinderGeometry(0.02, 0.02, 1.8, 6),
         ghibliGateFrameMat,
@@ -508,12 +579,70 @@ export function createEnvironment(scene) {
     fenceGroup.add(leaf);
   }
 
+  // ==========================================================================
+  // 3. Ghibli 3D Distant Cumulus Clouds
+  // Towering anime cumulus clouds along the distant horizon with slow drift
+  // ==========================================================================
+  const cloudsGroup = new THREE.Group();
+  envGroup.add(cloudsGroup);
+
+  const ghibliCloudMat = createGhibliMaterial({
+    colors: ["#ffffff", "#f2f7fd", "#adc3dd", "#839bb8"],
+    thresholds: [0.6, 0.33, -0.06],
+  });
+
+  const cloudBankAngles = [
+    0.2, 0.72, 1.3, 1.88, 2.45, 3.02, 3.6, 4.18, 4.75, 5.32, 5.9, 6.22,
+  ];
+  const sphereGeo = new THREE.SphereGeometry(1, 12, 8);
+
+  for (let i = 0; i < cloudBankAngles.length; i++) {
+    const angle = cloudBankAngles[i];
+    const dist = 320 + (i % 3) * 35;
+    const baseY = 55 + (i % 4) * 12;
+    const bankScale = 24 + (i % 5) * 6;
+
+    const bank = new THREE.Group();
+    bank.position.set(Math.cos(angle) * dist, baseY, Math.sin(angle) * dist);
+
+    const puffs = [
+      { x: 0, y: 0, z: 0, r: 1.0 },
+      { x: -0.65 * bankScale, y: -0.2 * bankScale, z: 0.1 * bankScale, r: 0.75 },
+      { x: 0.65 * bankScale, y: -0.22 * bankScale, z: -0.1 * bankScale, r: 0.72 },
+      { x: -1.15 * bankScale, y: -0.38 * bankScale, z: 0.2 * bankScale, r: 0.55 },
+      { x: 1.15 * bankScale, y: -0.4 * bankScale, z: -0.2 * bankScale, r: 0.52 },
+      { x: 0, y: 0.55 * bankScale, z: 0, r: 0.8 },
+      { x: -0.4 * bankScale, y: 0.42 * bankScale, z: 0.1 * bankScale, r: 0.68 },
+      { x: 0.42 * bankScale, y: 0.38 * bankScale, z: -0.1 * bankScale, r: 0.66 },
+    ];
+
+    for (const puff of puffs) {
+      const mesh = new THREE.Mesh(sphereGeo, ghibliCloudMat);
+      mesh.scale.set(puff.r * bankScale, puff.r * bankScale * 0.85, puff.r * bankScale);
+      mesh.position.set(puff.x, puff.y, puff.z);
+      bank.add(mesh);
+    }
+    cloudsGroup.add(bank);
+  }
+
   return {
-    envGroup, groundGroup,
-    get forestGroup() { return forest.group; },
-    get treeCount() { return forest.trees.length; },
-    get forest() { return forest; },
-    plant(exclusions, settings) { forest = createForest(envGroup, exclusions, settings); },
-    update(time, camera) { forest.update(time, camera); },
+    envGroup,
+    groundGroup,
+    get forestGroup() {
+      return forest ? forest.group : null;
+    },
+    get treeCount() {
+      return forest ? forest.trees.length : 0;
+    },
+    get forest() {
+      return forest;
+    },
+    plant(exclusions, settings) {
+      forest = createForest(envGroup, exclusions, settings);
+    },
+    update(time, camera) {
+      if (cloudsGroup) cloudsGroup.rotation.y = time * 0.002;
+      if (forest) forest.update(time, camera);
+    },
   };
 }
