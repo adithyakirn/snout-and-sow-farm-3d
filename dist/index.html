@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#101e23" />
+    <meta
+      name="description"
+      content="Explore the Snout & Sow farm CCTV plan on real satellite imagery. Interactive Three.js buildings, cameras and individual cable routes."
+    />
+    <title>Snout & Sow — Farm atlas</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three.module.js",
+          "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main
+      id="viewport"
+      aria-label="Interactive 3D satellite model of Snout and Sow farm"
+    ></main>
+    <svg id="label-leaders" aria-hidden="true"></svg>
+    <div id="labels"></div>
+    <header>
+      <div class="brand-symbol" aria-hidden="true">S<span>·</span>S</div>
+      <div>
+        <h1>Snout & Sow</h1>
+        <p>Hebbala · Farm atlas</p>
+      </div>
+      <button id="reset" aria-label="Return to whole farm">Recenter</button>
+    </header>
+    <nav class="view-control" aria-label="Map view">
+      <button id="perspective" class="active" aria-pressed="true">
+        3D site</button
+      ><button id="top" aria-pressed="false">Satellite map</button
+      ><button id="interior-view">Inside</button>
+    </nav>
+    <div class="map-tools">
+      <button id="zoom-in" aria-label="Zoom in">+</button
+      ><button id="zoom-out" aria-label="Zoom out">−</button
+      ><button
+        id="rotate"
+        aria-label="Automatically rotate model"
+        aria-pressed="false"
+      >
+        ↻</button
+      ><button id="north" aria-label="Show north-up map">
+        <span id="north-arrow">↑</span>N
+      </button>
+    </div>
+    <div id="map-status" role="status">Loading satellite imagery…</div>
+    <section id="panel" class="collapsed" aria-label="Map controls">
+      <div id="sheet-head">
+        <div>
+          <span class="eyebrow" id="sheet-eyebrow">EXPLORE THE SITE</span>
+          <h2 id="sheet-title">Layers</h2>
+        </div>
+        <button
+          id="collapse"
+          aria-label="Close panel"
+          aria-expanded="false"
+          aria-controls="panel-body"
+        >
+          ×
+        </button>
+      </div>
+      <div id="panel-body" class="hidden">
+        <div id="layers-pane" class="pane">
+          <p class="sheet-intro">Choose what appears on your map.</p>
+          <div class="layer-list">
+            <label
+              ><span
+                ><b>People in the kitchen</b
+                ><small
+                  >Two illustrative people walking in the kitchen room</small
+                ></span
+              ><input id="people" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Cages & central pathways</b
+                ><small
+                  >A 68 · B 19 · D 20 · C open chicken enclosure</small
+                ></span
+              ><input id="interiors" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Pigs & chickens</b
+                ><small>Illustrative animals inside the sheds</small></span
+              ><input id="animals" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Animal movement</b
+                ><small>Pause or resume the animation</small></span
+              ><input id="animation" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Rooftop PoE switches</b
+                ><small
+                  >Tap a switch to highlight its port connections</small
+                ></span
+              ><input id="switches" type="checkbox" checked role="switch"
+            /></label>
+
+            <label
+              ><span
+                ><b>Satellite imagery</b
+                ><small
+                  >Full satellite ground and surrounding fields</small
+                ></span
+              ><input id="satellite" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>3D buildings</b
+                ><small>3D shells, roof supports and shadows</small></span
+              ><input id="buildings" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Roofs</b
+                ><small>Hide to inspect the shed interiors</small></span
+              ><input id="roofs" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Cameras</b
+                ><small>12 planned mounting positions</small></span
+              ><input id="camera-layer" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Viewing directions</b
+                ><small>Arrows show proposed orientation</small></span
+              ><input id="directions" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b><i class="cyan"></i>Cat 6 wires</b
+                ><small>12 independent camera runs</small></span
+              ><input id="cables" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b><i class="gold"></i>Fibre link</b
+                ><small>Network room to switch 2 at Shed A</small></span
+              ><input id="fibre" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b><i class="green"></i>Future shed cables</b
+                ><small>Spare provision for US A and US B</small></span
+              ><input id="future-cables" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Upcoming sheds</b
+                ><small>Reserved locations, indicative sizes</small></span
+              ><input id="future-sheds" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Map labels</b
+                ><small>Buildings and camera identifiers</small></span
+              ><input id="names" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Wires through roofs</b
+                ><small>Keep every route visible above buildings</small></span
+              ><input id="xray" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>Planning grid</b
+                ><small>5 m spacing in the model</small></span
+              ><input id="grid" type="checkbox" role="switch"
+            /></label>
+          </div>
+        </div>
+        <div id="measure-pane" class="pane hidden">
+          <h3>Ground distance</h3>
+          <p>
+            Tap two points in the satellite map. Distances use the imagery’s
+            geographic scale.
+          </p>
+          <div id="measure-result" class="metric">
+            Choose two points on the map.
+          </div>
+          <button id="measure-start" class="primary" aria-pressed="false">
+            Choose two map points</button
+          ><button id="measure-clear" class="secondary">
+            Clear measurement
+          </button>
+          <p>
+            Measurements are straight-line estimates. Roof edges, pixel
+            resolution and endpoint placement affect accuracy.
+          </p>
+        </div>
+        <div id="inspect-pane" class="pane hidden">
+          <label class="field-label" for="selection">Location or camera</label
+          ><select id="selection">
+            <option value="overview">Whole farm</option>
+          </select>
+          <h3 id="detail-title">12 cameras. Two switches.</h3>
+          <p id="detail-text">Select a camera to isolate its cable route.</p>
+          <div id="detail-extra"></div>
+          <button id="focus" class="primary" disabled>Focus on selection</button
+          ><button id="clear-selection" class="secondary">
+            Show all connections
+          </button>
+          <div class="legend">
+            <span><i class="cyan"></i>Cat 6</span
+            ><span><i class="gold"></i>Fibre</span
+            ><span><i class="green"></i>Future</span>
+          </div>
+        </div>
+        <div id="plan-pane" class="pane hidden">
+          <div class="summary-count">
+            <strong>12</strong
+            ><span
+              >cameras planned<br /><small>4 spare NVR channels</small></span
+            >
+          </div>
+          <table>
+            <caption>
+              Camera allocation
+            </caption>
+            <tbody>
+              <tr>
+                <td>Shed A</td>
+                <td>4</td>
+              </tr>
+              <tr>
+                <td>Shed B</td>
+                <td>2</td>
+              </tr>
+              <tr>
+                <td>Shed C · chicken</td>
+                <td>1</td>
+              </tr>
+              <tr>
+                <td>Shed D</td>
+                <td>2</td>
+              </tr>
+              <tr>
+                <td>Gate</td>
+                <td>1</td>
+              </tr>
+              <tr>
+                <td>Kitchen</td>
+                <td>2</td>
+              </tr>
+              <tr>
+                <td>US A and US B</td>
+                <td>Cable only</td>
+              </tr>
+            </tbody>
+          </table>
+          <h3>Cages & pathways</h3>
+          <p>
+            Shed A has 68 cages, interpreted as 34 on each side of a central
+            pathway. Shed B has 19 total, split 10 and 9. Shed D has 20 total,
+            split 10 and 10. Shed C is an open chicken enclosure.
+          </p>
+          <p>
+            Tap Inside to hide roofs. Cage dimensions, animal sizes and animal
+            populations are illustrative. The cage counts above follow the
+            current interpretation of your layout.
+          </p>
+          <h3>Kitchen and camera views</h3>
+          <p>
+            The medicine room is shown in the left half and the kitchen in the
+            right half, with a connecting doorway. Select Kitchen, then Inside
+            to see two walking people and the interior K1 camera.
+          </p>
+          <p>
+            G1 is beside the gate-facing corner of Shed A, aimed at the gate. K2
+            is outside the kitchen and also faces the gate. K1 faces into the
+            kitchen room.
+          </p>
+          <p>
+            The network room remains at its original left-side location. It is
+            moved only about 3 m farther from the cage area. Its rooftop switch,
+            cable routes and distances follow this small adjustment.
+          </p>
+          <h3>Network equipment</h3>
+          <p>
+            16-channel NVR · 2 TB surveillance HDD · two 8-port PoE switches.
+          </p>
+          <p>
+            Switch 1 is shown on the network room roof and serves B1, B2, C1, D1
+            and D2. Switch 2 is shown on Shed A’s roof and serves A1–A4, G1, K1
+            and K2. Each camera cable connects to a distinct numbered port. The
+            gold link joins the fibre endpoints at the two switches.
+          </p>
+          <p id="cable-totals"></p>
+          <p>
+            Quoted allowance is 400 m Cat 6 and 100 m fibre. The drawn routes
+            are proposed. Confirm installed lengths, switch power and fibre
+            terminations on site.
+          </p>
+          <details>
+            <summary>Map alignment & assumptions</summary>
+            <p>
+              Satellite imagery is georeferenced around 12.237876, 76.137735.
+              The model is visually aligned using the three identifiable shed
+              roofs from your screenshots. Small registration differences are
+              expected.
+            </p>
+            <p>
+              Shed C, kitchen, network room and future shed footprints are
+              indicative. Building shells and heights are illustrative. The
+              satellite surface is flat, with no surveyed elevation model.
+              Building measurements are estimates.
+            </p>
+            <p>
+              Shed A has two cameras at each end. Shed D entrance is assumed at
+              the left end of your screenshot. D1 faces inside and D2 points
+              toward the network room and gate. Arrows indicate orientation,
+              with no verified field of view.
+            </p>
+            <p>
+              US A and US B include cable provision only. Final cable counts
+              remain open.
+            </p>
+          </details>
+          <a
+            class="external"
+            href="https://www.google.com/maps?q=12.237876,76.137735"
+            target="_blank"
+            rel="noopener"
+            >Open location in Google Maps ↗</a
+          >
+        </div>
+      </div>
+    </section>
+    <nav class="bottom-nav" aria-label="Farm tools">
+      <button data-pane="layers"><span aria-hidden="true">▱</span>Layers</button
+      ><button data-pane="inspect">
+        <span aria-hidden="true">◎</span>Inspect</button
+      ><button data-pane="measure">
+        <span aria-hidden="true">⌁</span>Measure</button
+      ><button data-pane="plan"><span aria-hidden="true">☷</span>Plan</button>
+    </nav>
+    <footer>
+      <span id="gesture-hint">Drag to orbit · Pinch to zoom</span
+      ><small>Approximate 3D layout</small>
+    </footer>
+    <div id="attribution">
+      Imagery ©
+      <a
+        href="https://www.esri.com/en-us/arcgis/products/arcgis-world-imagery/overview"
+        target="_blank"
+        rel="noopener"
+        >Esri</a
+      >, Vantor, Earthstar Geographics, GIS User Community
+    </div>
+    <div id="loading" role="status">
+      <div class="loader"></div>
+      <strong>Opening the farm</strong
+      ><span>Satellite imagery + 3D site plan</span>
+    </div>
+    <script>
+      window.addEventListener("error", function (e) {
+        if (e.message && document.getElementById("loading")) {
+          var n = document.getElementById("loading");
+          n.classList.remove("hidden");
+          n.textContent =
+            "The 3D view could not start. Reload in an updated browser with WebGL enabled.";
+        }
+      });
+    </script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

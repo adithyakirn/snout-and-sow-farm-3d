@@ -1,0 +1,1454 @@
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Line2 } from "./vendor/lines/Line2.js";
+import { LineGeometry } from "./vendor/lines/LineGeometry.js";
+import { LineMaterial } from "./vendor/lines/LineMaterial.js";
+import { createInteriors } from "./interiors.js";
+import { createKitchenInterior } from "./kitchen.js";
+const $ = (id) => document.getElementById(id);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color("#a7b6b2");
+scene.fog = new THREE.Fog("#a7b6b2", 700, 1800);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 800 ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+$("viewport").append(renderer.domElement);
+const view = new THREE.PerspectiveCamera(
+  42,
+  innerWidth / innerHeight,
+  0.1,
+  3000,
+);
+const controls = new OrbitControls(view, renderer.domElement);
+controls.enableDamping = true;
+controls.minDistance = 12;
+controls.maxDistance = 450;
+controls.maxPolarAngle = Math.PI * 0.47;
+controls.autoRotateSpeed = 0.5;
+const baseTarget = new THREE.Vector3(0, 0, 0);
+function reset(top = false) {
+  controls.target.copy(baseTarget);
+  view.position
+    .copy(baseTarget)
+    .add(
+      top
+        ? new THREE.Vector3(0.03, 155, -0.095)
+        : new THREE.Vector3(20, 110, 110),
+    );
+  controls.update();
+  if (innerWidth <= 700) {
+    view.updateMatrixWorld();
+    let fit = 1;
+    for (const x of [-33, 35])
+      for (const z of [-52, 53]) {
+        const projected = new THREE.Vector3(x, 0, z).project(view);
+        fit = Math.max(
+          fit,
+          Math.abs(projected.x) / 0.83,
+          Math.abs(projected.y) / 0.62,
+        );
+      }
+    view.position.sub(controls.target).multiplyScalar(fit).add(controls.target);
+    controls.update();
+  }
+}
+reset();
+scene.add(new THREE.HemisphereLight(0xc9eaff, 0x24342f, 2.1));
+const sun = new THREE.DirectionalLight(0xffefcd, 3);
+sun.position.set(-35, 80, 30);
+sun.castShadow = true;
+const shadowSize = innerWidth < 800 ? 1024 : 2048;
+sun.shadow.mapSize.set(shadowSize, shadowSize);
+Object.assign(sun.shadow.camera, {
+  left: -80,
+  right: 80,
+  top: 90,
+  bottom: -90,
+  near: 1,
+  far: 220,
+});
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+const roofs = [],
+  labels = [],
+  routes = [],
+  pickables = [],
+  cameras = [],
+  cameraObjects = [],
+  directionObjects = [],
+  futureObjects = [],
+  lineMaterials = [];
+const mapScale = 0.159940235270572 * 0.5835943116518173;
+const satelliteGroup = new THREE.Group();
+scene.add(satelliteGroup);
+const entries = new Map();
+const mats = {
+  wall: new THREE.MeshStandardMaterial({ color: 0x819a9d, roughness: 0.9 }),
+  roof: new THREE.MeshStandardMaterial({
+    color: 0xb9cdd2,
+    metalness: 0.25,
+    roughness: 0.65,
+  }),
+  trim: new THREE.MeshStandardMaterial({ color: 0x425966 }),
+  ground: new THREE.MeshStandardMaterial({ color: 0x182b32, roughness: 1 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x172c37 }),
+  camera: new THREE.MeshStandardMaterial({ color: 0xf2f2e8 }),
+  lens: new THREE.MeshStandardMaterial({
+    color: 0x061921,
+    metalness: 0.6,
+    roughness: 0.2,
+  }),
+};
+function box(w, h, d, x, y, z, mat, parent = scene) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+box(4000, 0.35, 4000, 0, -0.3, 0, mats.ground);
+const grid = new THREE.GridHelper(400, 80, 0x3e5963, 0x253e48);
+grid.position.y = 0.01;
+grid.visible = false;
+scene.add(grid);
+function pos(x, y) {
+  return new THREE.Vector3((x - 550) * mapScale, 0, (y - 1050) * mapScale);
+}
+function label(text, position, id, kind = "") {
+  const el = document.createElement("button");
+  el.className = "map-label " + kind;
+  el.textContent = text;
+  el.setAttribute("aria-label", "Inspect " + text);
+  el.onclick = () => select(id);
+  $("labels").append(el);
+  const leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  $("label-leaders").append(leader);
+  labels.push({ el, position, id, kind, leader });
+}
+function addEntry(id, name, description, position) {
+  entries.set(id, { name, description, position });
+  const option = document.createElement("option");
+  option.value = id;
+  option.textContent = name;
+  $("selection").append(option);
+}
+function line(points, color, width = 0.07, parent = scene, dashed = false) {
+  if (dashed) {
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const l = new THREE.Line(
+      geo,
+      new THREE.LineDashedMaterial({ color, dashSize: 0.8, gapSize: 0.5 }),
+    );
+    l.computeLineDistances();
+    parent.add(l);
+    return l;
+  }
+  const group = new THREE.Group();
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1],
+      b = points[i],
+      delta = b.clone().sub(a);
+    if (delta.length() < 0.001) continue;
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(width, width, delta.length(), 6),
+      new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.35,
+      }),
+    );
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      delta.normalize(),
+    );
+    group.add(mesh);
+  }
+  parent.add(group);
+  return group;
+}
+const buildings = {};
+function building(id, name, p, w, d, description, indicative = false) {
+  const group = new THREE.Group();
+  group.position.copy(pos(...p));
+  group.rotation.y = -0.13;
+  scene.add(group);
+  const h = 3;
+  // The building shell is illustrative and preserves the mapped footprint.
+  const isShed = id.startsWith("shed-");
+  const slabMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8b8980,
+    roughness: 1,
+  });
+  box(w, 0.18, d, 0, 0.09, 0, slabMaterial, group);
+  const wallHeight = id === "shed-c" ? 0.2 : isShed ? 1.15 : h;
+  for (const side of [-1, 1]) {
+    box(
+      w,
+      wallHeight,
+      0.18,
+      0,
+      wallHeight / 2,
+      side * (d / 2 - 0.09),
+      mats.wall,
+      group,
+    );
+    for (let x = -w / 2 + 0.15; x <= w / 2 - 0.15; x += 3.8) {
+      box(0.19, h, 0.19, x, h / 2, side * (d / 2 - 0.12), mats.trim, group);
+    }
+  }
+  box(0.18, wallHeight, d, w / 2 - 0.09, wallHeight / 2, 0, mats.wall, group);
+  // Leave an opening at the left end for the entrance.
+  const opening = Math.min(2.3, d * 0.4),
+    sideWidth = (d - opening) / 2;
+  for (const side of [-1, 1])
+    box(
+      0.18,
+      h,
+      sideWidth,
+      -w / 2 + 0.09,
+      h / 2,
+      side * (opening / 2 + sideWidth / 2),
+      mats.wall,
+      group,
+    );
+  box(0.2, 0.3, d, -w / 2 + 0.09, h - 0.15, 0, mats.trim, group);
+  if (isShed) {
+    for (let x = -w / 2 + 2; x < w / 2; x += 4)
+      box(0.12, 0.14, d, x, h - 0.06, 0, mats.trim, group);
+  }
+
+  const roofGroup = new THREE.Group();
+  group.add(roofGroup);
+  roofs.push(roofGroup);
+  const rw = w / 2 + 0.4,
+    rd = d / 2 + 0.4,
+    eave = h + 0.1,
+    ridge = h + 1.3;
+  const roofGeometry = new THREE.BufferGeometry();
+  roofGeometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(
+      [
+        -rw,
+        eave,
+        -rd,
+        rw,
+        eave,
+        -rd,
+        rw,
+        ridge,
+        0,
+        -rw,
+        eave,
+        -rd,
+        rw,
+        ridge,
+        0,
+        -rw,
+        ridge,
+        0,
+        -rw,
+        ridge,
+        0,
+        rw,
+        ridge,
+        0,
+        rw,
+        eave,
+        rd,
+        -rw,
+        ridge,
+        0,
+        rw,
+        eave,
+        rd,
+        -rw,
+        eave,
+        rd,
+      ],
+      3,
+    ),
+  );
+  roofGeometry.computeVertexNormals();
+  const roofMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8a9391,
+    roughness: 0.8,
+    metalness: 0.18,
+    side: THREE.DoubleSide,
+  });
+  const roofMesh = new THREE.Mesh(roofGeometry, roofMaterial);
+  roofMesh.castShadow = true;
+  roofMesh.receiveShadow = true;
+  roofGroup.add(roofMesh);
+  for (let x = -rw; x < rw; x += 0.8)
+    line(
+      [
+        new THREE.Vector3(x, eave + 0.03, -rd),
+        new THREE.Vector3(x, ridge + 0.03, 0),
+        new THREE.Vector3(x, eave + 0.03, rd),
+      ],
+      0x596563,
+      0.023,
+      roofGroup,
+    );
+  const edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)),
+    new THREE.LineBasicMaterial({
+      color: 0xc8e3e7,
+      transparent: true,
+      opacity: 0.35,
+    }),
+  );
+  edge.position.y = h / 2;
+  group.add(edge);
+  group.updateMatrixWorld(true);
+  const point = (x, z, y = 2.9) =>
+    group.localToWorld(new THREE.Vector3(x, y, z));
+  const b = { group, w, d, point };
+  buildings[id] = b;
+  const anchor = point(0, 0, 5);
+  label(name, anchor, id);
+  addEntry(
+    id,
+    name,
+    description +
+      (indicative
+        ? " Footprint and height are illustrative."
+        : " Roof dimensions are approximate and height is illustrative."),
+    anchor,
+  );
+  return b;
+}
+const a = building(
+  "shed-a",
+  "Shed A",
+  [550, 1360],
+  32,
+  17,
+  "4 cameras, two at each end. Proposed PoE switch 2 serves this shed, the gate and kitchen.",
+);
+const b = building(
+  "shed-b",
+  "Shed B",
+  [563, 1100],
+  28,
+  8,
+  "2 cameras, one at each end, connected to switch 1.",
+);
+const c = building(
+  "shed-c",
+  "Shed C · chicken",
+  [531, 749],
+  22,
+  5,
+  "1 camera at the assumed left end, connected to switch 1.",
+  true,
+);
+const d = building(
+  "shed-d",
+  "Shed D",
+  [608, 635],
+  34,
+  11,
+  "Both cameras at the assumed left-end entrance. D1 looks inside. D2 points toward the network room and gate.",
+);
+const kitchen = building(
+  "kitchen",
+  "Kitchen",
+  [849, 1509],
+  9,
+  6,
+  "Two rooms, medicine on the left and kitchen on the right. K1 is inside the kitchen. K2 faces the gate. Both connect to roof switch 2 at Shed A.",
+  true,
+);
+const network = building(
+  "network",
+  "Network / CCTV",
+  [341 - 3 / mapScale, 928],
+  6,
+  6,
+  "NVR and 2 TB hard drive in the room, with PoE switch 1 shown on its roof. Kept at its original left-side location and moved only 3 m farther from the cage area. Five current cameras connect here. A fibre link connects switch 2 on Shed A’s roof.",
+  true,
+);
+// Door is drawn on the short entrance face of Shed D.
+box(0.12, 2.3, 2.2, -17.07, 1.15, 0, mats.dark, d.group);
+const gate = pos(294, 1565);
+for (const dx of [-2.5, 2.5])
+  box(0.4, 2, 0.4, gate.x + dx, 1, gate.z, mats.wall);
+for (let dx = -2.2; dx < 2.5; dx += 0.55)
+  box(0.08, 1.5, 0.09, gate.x + dx, 0.9, gate.z, mats.trim);
+box(5, 0.1, 0.1, gate.x, 1.65, gate.z, mats.trim);
+label("Gate", gate.clone().add(new THREE.Vector3(0, 4, 0)), "gate");
+addEntry(
+  "gate",
+  "Gate",
+  "G1 is mounted beside Shed A and faces this gate. Connected to switch 2 on Shed A.",
+  gate,
+);
+const future = [];
+for (const [id, name, p] of [
+  ["us-a", "US A · upcoming", [532, 961]],
+  ["us-b", "US B · upcoming", [532, 862]],
+]) {
+  const q = pos(...p),
+    w = 25,
+    depth = 6;
+  const corners = [
+    [-w / 2, -depth / 2],
+    [w / 2, -depth / 2],
+    [w / 2, depth / 2],
+    [-w / 2, depth / 2],
+    [-w / 2, -depth / 2],
+  ].map(([x, z]) => new THREE.Vector3(q.x + x, 0.12, q.z + z));
+  futureObjects.push(line(corners, 0x98cf87, 0.08, scene, true));
+  label(name, q.clone().add(new THREE.Vector3(0, 1, 0)), id, "future");
+  addEntry(
+    id,
+    name,
+    "Cable provision only. Future building size, camera locations and number of cable runs are to be confirmed.",
+    q,
+  );
+  future.push({ id, q });
+}
+const interiors = createInteriors(buildings, scene);
+const kitchenInterior = createKitchenInterior(kitchen);
+label("Medicine", kitchen.point(-2.2, 0, 1.2), "medicine-room", "room");
+label("Kitchen room", kitchen.point(2.2, 0, 1.2), "kitchen-room", "room");
+addEntry(
+  "medicine-room",
+  "Medicine room",
+  "Left half of the building, with illustrative medicine shelves. Room division is assumed equal.",
+  kitchenInterior.medicineCentre,
+);
+addEntry(
+  "kitchen-room",
+  "Kitchen room",
+  "Right half of the building, with an interior K1 camera and two illustrative walking people.",
+  kitchenInterior.kitchenCentre,
+);
+entries.get("us-a").description +=
+  " The network room remains on its original left side, slightly farther from the cage area.";
+
+const switchObjects = [];
+function createRoofSwitch(id, shed, number, description) {
+  const group = new THREE.Group();
+  group.position.copy(shed.point(0, 0, 4.65));
+  group.rotation.y = shed.group.rotation.y;
+  scene.add(group);
+  switchObjects.push(group);
+  const support = new THREE.MeshStandardMaterial({
+    color: 0xb7c2bf,
+    roughness: 0.6,
+  });
+  box(2.7, 0.12, 1.5, 0, -0.14, 0, support, group);
+  const body = box(2.5, 0.5, 1.25, 0, 0.15, 0, mats.dark, group);
+  body.userData.id = id;
+  pickables.push(body);
+  const portMaterial = new THREE.MeshBasicMaterial({ color: 0x4cdef0 });
+  for (let i = 0; i < 8; i++)
+    box(0.15, 0.14, 0.08, -0.84 + i * 0.24, 0.18, 0.66, portMaterial, group);
+  box(
+    0.16,
+    0.14,
+    0.08,
+    1.25,
+    0.18,
+    0.4,
+    new THREE.MeshBasicMaterial({ color: 0xf1bd62 }),
+    group,
+  );
+  group.updateMatrixWorld(true);
+  const ports = Array.from({ length: 8 }, (_, i) =>
+    group.localToWorld(new THREE.Vector3(-0.84 + i * 0.24, 0.18, 0.71)),
+  );
+  const fibre = group.localToWorld(new THREE.Vector3(1.29, 0.18, 0.4));
+  const position = group.position.clone();
+  label(
+    "PoE " + number,
+    position.clone().add(new THREE.Vector3(0, 1.6, 0)),
+    id,
+    "switch",
+  );
+  addEntry(
+    id,
+    "PoE switch " + number,
+    description +
+      " Shown in a rooftop enclosure. Select to highlight its connections.",
+    position,
+  );
+  return { id, number, group, shed, ports, fibre };
+}
+const roofSwitches = {
+  1: createRoofSwitch(
+    "switch-1",
+    network,
+    1,
+    "Network room roof. Serves B1, B2, C1, D1, D2 and future shed provisions.",
+  ),
+  2: createRoofSwitch(
+    "switch-2",
+    a,
+    2,
+    "Shed A roof. Serves A1–A4, G1, K1 and K2.",
+  ),
+};
+function switchLead(switchNumber, portIndex, fibre = false) {
+  const item = roofSwitches[switchNumber];
+  const start = fibre ? item.fibre : item.ports[portIndex];
+  const laneX = (portIndex - 3.5) * 0.4;
+  return [
+    start.clone(),
+    item.shed.point(laneX, 1.1, 4.55),
+    item.shed.point(laneX, item.shed.d / 2 + 0.65, 3.25),
+    item.shed.point(laneX, item.shed.d / 2 + 0.65, 0.25),
+  ];
+}
+const camGroup = new THREE.Group();
+scene.add(camGroup);
+function addCamera(id, point, dir, switchId, description) {
+  const body = new THREE.Group();
+  body.position.copy(point);
+  camGroup.add(body);
+  cameraObjects.push(body);
+  dir = dir.clone().normalize();
+  body.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+  const casing = box(0.65, 0.45, 1.2, 0, 0, 0, mats.camera, body);
+  box(0.48, 0.32, 0.06, 0, 0, 0.64, mats.lens, body);
+  box(0.15, 0.55, 0.15, 0, -0.45, -0.3, mats.trim, body);
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.4, 12, 8),
+    new THREE.MeshStandardMaterial({
+      color: 0x5ce1e5,
+      emissive: 0x209baf,
+      emissiveIntensity: 0.6,
+    }),
+  );
+  marker.position.copy(point).add(new THREE.Vector3(0, -0.8, 0));
+  scene.add(marker);
+  cameraObjects.push(marker);
+  marker.userData.id = id;
+  casing.userData.id = id;
+  pickables.push(marker, casing);
+  const arrow = new THREE.ArrowHelper(
+    dir,
+    point.clone().addScaledVector(dir, 0.8),
+    3,
+    0x79e8e8,
+    0.65,
+    0.4,
+  );
+  scene.add(arrow);
+  directionObjects.push(arrow);
+  const camera = { id, point, direction: dir.clone(), switchId, body };
+  cameras.push(camera);
+  label(id, point.clone().add(new THREE.Vector3(0, 1.5, 0)), id, "camera");
+  addEntry(
+    id,
+    id,
+    description +
+      " Independent Cat 6 connection to PoE switch " +
+      switchId +
+      ". Direction arrow is indicative.",
+    point,
+  );
+}
+const east = new THREE.Vector3(1, 0, 0.13),
+  west = east.clone().negate();
+addCamera("A1", a.point(-16.3, -5), east, 2, "Shed A, left end");
+addCamera("A2", a.point(-16.3, 5), east, 2, "Shed A, left end");
+addCamera("A3", a.point(16.3, -5), west, 2, "Shed A, right end");
+addCamera("A4", a.point(16.3, 5), west, 2, "Shed A, right end");
+addCamera("B1", b.point(-14.3, 0), east, 1, "Shed B, left end");
+addCamera("B2", b.point(14.3, 0), west, 1, "Shed B, right end");
+addCamera(
+  "C1",
+  c.point(-11.3, 0),
+  east,
+  1,
+  "Chicken shed, assumed left-end position",
+);
+addCamera(
+  "D1",
+  d.point(-16.8, -0.8),
+  east,
+  1,
+  "Shed D entrance, facing inside",
+);
+addCamera(
+  "D2",
+  d.point(-17.4, 1),
+  network.group.position
+    .clone()
+    .add(gate)
+    .multiplyScalar(0.5)
+    .setY(1.2)
+    .sub(d.point(-17.4, 1)),
+  1,
+  "Shed D entrance, facing toward the network room and gate",
+);
+const gateCameraPosition = a.point(-a.w / 2 - 0.4, a.d / 2 + 0.35, 2.9);
+const kitchenInsidePosition = kitchen.point(0.45, -2.45, 2.6);
+const kitchenGatePosition = kitchen.point(
+  -kitchen.w / 2 - 0.3,
+  kitchen.d / 2 + 0.25,
+  2.9,
+);
+const gateTarget = gate.clone().add(new THREE.Vector3(0, 1.2, 0));
+addCamera(
+  "G1",
+  gateCameraPosition,
+  gateTarget.clone().sub(gateCameraPosition),
+  2,
+  "Mounted beside the gate-facing corner of Shed A, aimed at the gate",
+);
+addCamera(
+  "K1",
+  kitchenInsidePosition,
+  kitchen.point(2.2, 0.7, 1.1).sub(kitchenInsidePosition),
+  2,
+  "Inside the right-hand kitchen room, facing across the working area",
+);
+addCamera(
+  "K2",
+  kitchenGatePosition,
+  gateTarget.clone().sub(kitchenGatePosition),
+  2,
+  "Outside the kitchen building, facing the gate",
+);
+// Each physical run has its own corridor lane and a continuous path to its camera.
+function route(id, points, color, dashed = false) {
+  const group = new THREE.Group();
+  scene.add(group);
+  const geometry = new LineGeometry();
+  geometry.setPositions(points.flatMap((p) => p.toArray()));
+  const type =
+    id === "fibre" ? "fibre" : id.startsWith("us-") ? "future" : "cat6";
+  const materials = [];
+  for (const [colorValue, width, order] of [
+    [0x081b24, 8, 20],
+    [color, 4, 21],
+  ]) {
+    const material = new LineMaterial({
+      color: colorValue,
+      linewidth: width,
+      worldUnits: false,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      dashed,
+      dashSize: 1.2,
+      gapSize: 0.7,
+    });
+    material.resolution.set(innerWidth, innerHeight);
+    lineMaterials.push(material);
+    materials.push(material);
+    const mesh = new Line2(geometry, material);
+    mesh.computeLineDistances();
+    mesh.renderOrder = order;
+    group.add(mesh);
+  }
+  let length = 0;
+  for (let i = 1; i < points.length; i++)
+    length += points[i].distanceTo(points[i - 1]);
+  routes.push({ id, obj: group, type, materials, points, length });
+  return group;
+}
+const assignedPorts = { 1: 0, 2: 0 };
+for (const [i, cam] of cameras.entries()) {
+  const portIndex = assignedPorts[cam.switchId]++;
+  cam.port = portIndex + 1;
+  const lead = switchLead(cam.switchId, portIndex);
+  const source = lead[lead.length - 1];
+  let lane = -20 - portIndex * 0.4;
+  const q = cam.point;
+  const shed = { A: a, B: b, C: c, D: d, K: kitchen, G: a }[cam.id[0]];
+  let tail;
+  if (shed) {
+    const local = shed.group.worldToLocal(q.clone());
+    const frontage = shed.d / 2 + 1.3 + (portIndex % 4) * 0.35;
+    const endpointSide = Math.sign(local.x) * (shed.w / 2 + 0.9);
+    const fromRight = cam.switchId === 1 && source.x > shed.group.position.x;
+    const entry = shed.point(
+      (fromRight ? 1 : -1) * (shed.w / 2 + 1.2),
+      frontage,
+      0.25,
+    );
+    if (cam.switchId === 1)
+      lane = fromRight
+        ? Math.max(source.x, entry.x) + 1.2 + portIndex * 0.35
+        : Math.min(source.x, entry.x) - 1.2 - portIndex * 0.35;
+    const turn = shed.point(endpointSide, frontage, 0.25);
+    const side = shed.point(endpointSide, local.z, 0.25);
+    if (cam.switchId === 2 && (cam.id[0] === "A" || cam.id[0] === "G")) {
+      const localSource = shed.group.worldToLocal(source.clone());
+      tail = [shed.point(localSource.x, frontage, 0.25), turn, side];
+    } else if (cam.switchId === 2 && cam.id[0] === "K") {
+      tail = [new THREE.Vector3(source.x, 0.25, entry.z), entry, turn, side];
+    } else {
+      tail = [
+        new THREE.Vector3(lane, 0.25, source.z),
+        new THREE.Vector3(lane, 0.25, entry.z),
+        entry,
+        turn,
+        side,
+      ];
+    }
+  } else {
+    tail = [
+      new THREE.Vector3(lane, 0.25, source.z),
+      new THREE.Vector3(lane, 0.25, q.z),
+    ];
+  }
+  let cameraTail = [new THREE.Vector3(q.x, 0.25, q.z), q.clone()];
+  if (cam.id === "K1") {
+    const wallEntry = kitchen.point(-kitchen.w / 2 - 0.25, -2.45, 0.25);
+    const ceilingEntry = kitchen.point(-kitchen.w / 2 - 0.25, -2.45, 2.7);
+    const roomEntry = kitchen.point(0.45, -2.45, 2.7);
+    tail = [new THREE.Vector3(source.x, 0.25, wallEntry.z), wallEntry];
+    cameraTail = [ceilingEntry, roomEntry, q.clone()];
+  }
+  route(cam.id, [...lead, ...tail, ...cameraTail], 0x50d6e2);
+  routes[routes.length - 1].switchIds = [cam.switchId];
+}
+const fibreStart = switchLead(1, 8, true);
+const fibreEnd = switchLead(2, 8, true);
+const startGround = fibreStart[fibreStart.length - 1];
+const endGround = fibreEnd[fibreEnd.length - 1];
+const fibreCorridor =
+  network.group.position.x > a.group.position.x
+    ? Math.max(startGround.x, a.point(a.w / 2 + 1.5, a.d / 2 + 1).x) + 1.2
+    : Math.min(startGround.x, a.point(-a.w / 2 - 1.5, a.d / 2 + 1).x) - 1.2;
+route(
+  "fibre",
+  [
+    ...fibreStart,
+    new THREE.Vector3(fibreCorridor, 0.25, startGround.z),
+    new THREE.Vector3(fibreCorridor, 0.25, endGround.z),
+    ...fibreEnd.reverse(),
+  ],
+  0xf1bd62,
+);
+routes[routes.length - 1].switchIds = [1, 2];
+for (const [i, { id, q }] of future.entries()) {
+  const lead = switchLead(1, 5 + i);
+  const ground = lead[lead.length - 1];
+  const rightSide = ground.x >= q.x;
+  const provisionX = q.x + (rightSide ? 12.5 : -12.5);
+  const futureLane = rightSide
+    ? Math.max(ground.x, provisionX) + 1 + i * 0.4
+    : Math.min(ground.x, provisionX) - 1 - i * 0.4;
+  route(
+    id,
+    [
+      ...lead,
+      new THREE.Vector3(futureLane, 0.25, ground.z),
+      new THREE.Vector3(futureLane, 0.25, q.z),
+      new THREE.Vector3(provisionX, 0.25, q.z),
+    ],
+    0x98cf87,
+    true,
+  );
+  routes[routes.length - 1].switchIds = [1];
+}
+for (const [id, description] of Object.entries({
+  "shed-a": "68 cages, interpreted as 34 per side with a central pathway.",
+  "shed-b":
+    "19 cages total, arranged 10 on one side and 9 on the other, with a central pathway.",
+  "shed-d": "20 cages total, arranged 10 on each side of a central pathway.",
+  "shed-c": "Open chicken enclosure with illustrative animated chickens.",
+}))
+  entries.get(id).description += " " + description;
+// Similarity registration from three visible roofs in the supplied map.
+const registration = {
+  a: -0.15228071380903005,
+  b: 0.048902587459338065,
+  tx: 625.1428722172055,
+  ty: 408.7158187405548,
+};
+function mapToModel(u, v) {
+  const { a, b, tx, ty } = registration,
+    det = a * a + b * b;
+  return pos(
+    (a * (u - tx) + b * (v - ty)) / det,
+    (-b * (u - tx) + a * (v - ty)) / det,
+  );
+}
+function modelToMap(p) {
+  const x = p.x / mapScale + 550,
+    y = p.z / mapScale + 1050,
+    { a, b, tx, ty } = registration;
+  return { u: a * x - b * y + tx, v: b * x + a * y + ty };
+}
+function coordinates(p) {
+  const { u, v } = modelToMap(p),
+    n = 2 ** 18;
+  const x = 186512 + u / 256,
+    y = 122091 + v / 256;
+  return {
+    lon: (x / n) * 360 - 180,
+    lat: (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI,
+  };
+}
+const northDirection = mapToModel(0, -1).sub(mapToModel(0, 0)).normalize();
+let loadedTiles = 0,
+  failedTiles = 0;
+const tileCount = 34;
+const textureLoader = new THREE.TextureLoader();
+function loadSatelliteTile(url, u, v, pixelSpan, height) {
+  const corners = [
+    [u, v],
+    [u + pixelSpan, v],
+    [u + pixelSpan, v + pixelSpan],
+    [u, v + pixelSpan],
+  ].map(([x, y]) => {
+    const p = mapToModel(x, y);
+    p.y = height;
+    return p;
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(
+      corners.flatMap((p) => p.toArray()),
+      3,
+    ),
+  );
+  geometry.setAttribute(
+    "uv",
+    new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2),
+  );
+  geometry.setIndex([0, 2, 1, 0, 3, 2]);
+  geometry.computeVertexNormals();
+  textureLoader.load(
+    url,
+    (texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = Math.min(
+        8,
+        renderer.capabilities.getMaxAnisotropy(),
+      );
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+      });
+      satelliteGroup.add(new THREE.Mesh(geometry, material));
+      loadedTiles++;
+      updateMapStatus();
+    },
+    undefined,
+    () => {
+      failedTiles++;
+      updateMapStatus();
+    },
+  );
+}
+// Wider zoom-16 imagery fills the surrounding environment. The zoom-18 farm
+// imagery sits above it, retaining the original geographic registration.
+for (let x = 46626; x <= 46630; x++)
+  for (let y = 30521; y <= 30525; y++) {
+    loadSatelliteTile(
+      "./tiles/context/" + x + "_" + y + ".jpg",
+      (x * 4 - 186512) * 256,
+      (y * 4 - 122091) * 256,
+      1024,
+      -0.105,
+    );
+  }
+for (let dx = -1; dx <= 1; dx++)
+  for (let dy = -1; dy <= 1; dy++) {
+    loadSatelliteTile(
+      "./tiles/" + dx + "_" + dy + ".jpg",
+      (dx + 1) * 256,
+      (dy + 1) * 256,
+      256,
+      -0.08,
+    );
+  }
+const groundShadows = new THREE.Mesh(
+  new THREE.PlaneGeometry(220, 220),
+  new THREE.ShadowMaterial({ opacity: 0.25, depthWrite: false }),
+);
+groundShadows.rotation.x = -Math.PI / 2;
+groundShadows.position.y = -0.04;
+groundShadows.receiveShadow = true;
+satelliteGroup.add(groundShadows);
+function updateMapStatus() {
+  $("map-status").textContent = failedTiles
+    ? "Some satellite tiles failed to load. Reload to retry."
+    : loadedTiles === tileCount
+      ? "Real satellite imagery · Map-calibrated metres"
+      : "Loading satellite imagery " + loadedTiles + "/" + tileCount;
+}
+let selected = "overview",
+  activePane = null,
+  mapView = false;
+const layerIds = [
+  "satellite",
+  "buildings",
+  "roofs",
+  "camera-layer",
+  "directions",
+  "cables",
+  "fibre",
+  "future-cables",
+  "future-sheds",
+  "names",
+  "grid",
+  "xray",
+  "interiors",
+  "animals",
+  "animation",
+  "switches",
+  "people",
+];
+function openPane(name) {
+  activePane = name;
+  $("panel").classList.remove("collapsed");
+  $("panel-body").classList.remove("hidden");
+  $("collapse").setAttribute("aria-expanded", "true");
+  $("sheet-title").textContent = {
+    layers: "Map layers",
+    inspect: "Inspect the plan",
+    plan: "Installation plan",
+    measure: "Measure distance",
+  }[name];
+  document
+    .querySelectorAll(".pane")
+    .forEach((p) => p.classList.toggle("hidden", p.id !== name + "-pane"));
+  document
+    .querySelectorAll("[data-pane]")
+    .forEach((b) => b.classList.toggle("active", b.dataset.pane === name));
+}
+function closePane() {
+  activePane = null;
+  $("panel").classList.add("collapsed");
+  $("panel-body").classList.add("hidden");
+  $("collapse").setAttribute("aria-expanded", "false");
+  document
+    .querySelectorAll("[data-pane]")
+    .forEach((b) => b.classList.remove("active"));
+}
+function applyLayers() {
+  satelliteGroup.visible = $("satellite").checked;
+  grid.visible = $("grid").checked;
+  for (const b of Object.values(buildings))
+    b.group.visible = $("buildings").checked;
+  roofs.forEach((r) => (r.visible = $("roofs").checked));
+  cameraObjects.forEach((o) => (o.visible = $("camera-layer").checked));
+  directionObjects.forEach(
+    (o) => (o.visible = $("directions").checked && $("camera-layer").checked),
+  );
+  futureObjects.forEach((o) => (o.visible = $("future-sheds").checked));
+  $("roofs").disabled = !$("buildings").checked;
+  $("interior-view").classList.toggle("active", !$("roofs").checked);
+  $("interior-view").setAttribute("aria-pressed", String(!$("roofs").checked));
+  interiors.interiorGroups.forEach(
+    (group) => (group.visible = $("interiors").checked),
+  );
+  interiors.animalRoot.visible = $("animals").checked && $("buildings").checked;
+  kitchenInterior.interior.visible = $("interiors").checked;
+  kitchenInterior.peopleRoot.visible =
+    $("people").checked && $("buildings").checked;
+  switchObjects.forEach((group) => (group.visible = $("switches").checked));
+  for (const r of routes) {
+    r.obj.visible = $(
+      r.type === "cat6"
+        ? "cables"
+        : r.type === "fibre"
+          ? "fibre"
+          : "future-cables",
+    ).checked;
+    r.materials.forEach((m) => (m.depthTest = !$("xray").checked));
+  }
+  try {
+    localStorage.setItem(
+      "farm-atlas-layers",
+      JSON.stringify(
+        Object.fromEntries(layerIds.map((id) => [id, $(id).checked])),
+      ),
+    );
+  } catch {}
+}
+for (const id of layerIds) $(id).onchange = applyLayers;
+try {
+  const saved = JSON.parse(localStorage.getItem("farm-atlas-layers") || "{}");
+  for (const id of layerIds)
+    if (typeof saved[id] === "boolean") $(id).checked = saved[id];
+} catch {}
+// Enable the expanded satellite environment once for this version.
+try {
+  if (localStorage.getItem("farm-atlas-environment-version") !== "2") {
+    $("satellite").checked = true;
+    localStorage.setItem("farm-atlas-environment-version", "2");
+  }
+} catch {}
+
+function select(id) {
+  selected = id;
+  $("selection").value = id;
+  const entry = entries.get(id),
+    cam = cameras.find((c) => c.id === id),
+    run = routes.find((r) => r.id === id);
+  $("detail-title").textContent = entry?.name || "12 cameras. Two switches.";
+  $("detail-text").textContent =
+    entry?.description ||
+    "Choose a camera to highlight its individual wire back to the switch.";
+  $("detail-extra").replaceChildren();
+  if (entry) {
+    const geo = coordinates(entry.position),
+      distance = Math.hypot(
+        entry.position.x - network.group.position.x,
+        entry.position.z - network.group.position.z,
+      );
+    const distanceInfo = document.createElement("p");
+    distanceInfo.className = "metric";
+    distanceInfo.textContent =
+      "Approx. " +
+      Math.round(distance) +
+      " m straight-line from network room centre.";
+    $("detail-extra").append(distanceInfo);
+    if (run) {
+      const cable = document.createElement("p");
+      cable.className = "metric";
+      cable.textContent =
+        "Drawn cable route ≈ " +
+        Math.round(run.length) +
+        " m" +
+        (cam ? " · Switch " + cam.switchId + " · Port " + cam.port : "") +
+        ". Includes model height changes. Installation route is proposed.";
+      $("detail-extra").append(cable);
+    }
+    const coords = document.createElement("p");
+    coords.textContent =
+      "Approx. map point " + geo.lat.toFixed(6) + ", " + geo.lon.toFixed(6);
+    $("detail-extra").append(coords);
+  }
+  if (id.startsWith("switch-")) {
+    const switchNumber = Number(id.slice(-1));
+    const list = document.createElement("p");
+    list.textContent = cameras
+      .filter((camera) => camera.switchId === switchNumber)
+      .map((camera) => "Port " + camera.port + " → " + camera.id)
+      .join(" · ");
+    $("detail-extra").append(list);
+  }
+  $("focus").disabled = !entry;
+  for (const r of routes) {
+    const switchNumber = id.startsWith("switch-") ? Number(id.slice(-1)) : null;
+    const highlight = cam
+      ? r.id === id
+      : switchNumber
+        ? r.switchIds.includes(switchNumber)
+        : true;
+    r.materials[0].opacity = highlight ? 0.9 : 0.15;
+    r.materials[1].opacity = highlight ? 1 : 0.25;
+    r.materials[0].linewidth = highlight && cam ? 11 : 8;
+    r.materials[1].linewidth = highlight && cam ? 6 : 4;
+  }
+  for (const l of labels) l.el.classList.toggle("selected", l.id === id);
+  openPane("inspect");
+}
+$("selection").onchange = (e) => select(e.target.value);
+$("clear-selection").onclick = () => select("overview");
+$("focus").onclick = () => {
+  const entry = entries.get(selected);
+  if (!entry) return;
+  const targetShed =
+    buildings[selected] || (selected.endsWith("-room") ? kitchen : null);
+  const focusDistance = targetShed
+    ? Math.max(
+        38,
+        (0.52 * Math.hypot(targetShed.w, targetShed.d)) /
+          Math.tan(THREE.MathUtils.degToRad(view.fov / 2)) /
+          Math.min(1, view.aspect),
+      )
+    : innerWidth < 800
+      ? 52
+      : 38;
+  const offset = view.position
+    .clone()
+    .sub(controls.target)
+    .normalize()
+    .multiplyScalar(focusDistance);
+  controls.target.copy(entry.position);
+  view.position.copy(entry.position).add(offset);
+  controls.update();
+  closePane();
+};
+function setView(top) {
+  mapView = top;
+  controls.autoRotate = false;
+  controls.enableRotate = !top;
+  $("rotate").classList.remove("active");
+  $("rotate").setAttribute("aria-pressed", "false");
+  reset(top);
+  $("perspective").classList.toggle("active", !top);
+  $("top").classList.toggle("active", top);
+  $("perspective").setAttribute("aria-pressed", String(!top));
+  $("top").setAttribute("aria-pressed", String(top));
+  $("gesture-hint").textContent = top
+    ? "Drag to pan · Pinch to zoom"
+    : "Drag to orbit · Pinch to zoom";
+  controls.mouseButtons.LEFT = top ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  controls.touches.ONE = top ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+}
+$("interior-view").onclick = () => {
+  setView(false);
+  $("roofs").checked = false;
+  $("buildings").checked = true;
+  $("interiors").checked = true;
+  $("animals").checked = true;
+  $("people").checked = true;
+  applyLayers();
+  const selectedCamera = cameras.find((camera) => camera.id === selected);
+  const cameraShed = selectedCamera
+    ? {
+        A: "shed-a",
+        B: "shed-b",
+        C: "shed-c",
+        D: "shed-d",
+        K: "kitchen",
+        G: "shed-a",
+      }[selectedCamera.id[0]]
+    : null;
+  const shedId =
+    selected === "kitchen" || selected.endsWith("-room")
+      ? "kitchen"
+      : selected.startsWith("shed-")
+        ? selected
+        : cameraShed || "shed-a";
+  select(shedId);
+  $("focus").onclick();
+};
+$("perspective").onclick = () => setView(false);
+$("top").onclick = () => setView(true);
+$("north").onclick = () => setView(true);
+$("reset").onclick = () => {
+  setView(mapView);
+  select("overview");
+  closePane();
+};
+$("rotate").onclick = () => {
+  if (mapView) setView(false);
+  controls.autoRotate = !controls.autoRotate;
+  $("rotate").setAttribute("aria-pressed", String(controls.autoRotate));
+  $("rotate").classList.toggle("active", controls.autoRotate);
+};
+function zoom(factor) {
+  const offset = view.position.clone().sub(controls.target);
+  offset.setLength(
+    THREE.MathUtils.clamp(
+      offset.length() * factor,
+      controls.minDistance,
+      controls.maxDistance,
+    ),
+  );
+  view.position.copy(controls.target).add(offset);
+  controls.update();
+}
+$("zoom-in").onclick = () => zoom(0.8);
+$("zoom-out").onclick = () => zoom(1.25);
+$("collapse").onclick = closePane;
+document
+  .querySelectorAll("[data-pane]")
+  .forEach(
+    (button) =>
+      (button.onclick = () =>
+        activePane === button.dataset.pane
+          ? closePane()
+          : openPane(button.dataset.pane)),
+  );
+// Two-point measurement is calculated in calibrated ground metres.
+let measuring = false,
+  measurePoints = [];
+const measurementGroup = new THREE.Group();
+scene.add(measurementGroup);
+function clearMeasurement() {
+  for (const o of [...measurementGroup.children]) {
+    o.geometry?.dispose();
+    o.material?.dispose();
+    measurementGroup.remove(o);
+  }
+  measurePoints = [];
+  $("measure-result").textContent = "Choose two points on the map.";
+}
+function stopMeasurement() {
+  measuring = false;
+  $("labels").style.pointerEvents = "";
+  document
+    .querySelectorAll(".map-label")
+    .forEach((e) => (e.style.pointerEvents = ""));
+  controls.enabled = true;
+  $("measure-start").textContent = "Choose two map points";
+  $("measure-start").setAttribute("aria-pressed", "false");
+}
+$("measure-start").onclick = () => {
+  if (measuring) {
+    stopMeasurement();
+    return;
+  }
+  clearMeasurement();
+  setView(true);
+  measuring = true;
+  document
+    .querySelectorAll(".map-label")
+    .forEach((e) => (e.style.pointerEvents = "none"));
+  controls.enabled = false;
+  $("measure-start").textContent = "Cancel measurement";
+  $("measure-start").setAttribute("aria-pressed", "true");
+  closePane();
+  $("map-status").textContent = "Tap the first point. Tap Measure to cancel.";
+};
+$("measure-clear").onclick = () => {
+  stopMeasurement();
+  clearMeasurement();
+  updateMapStatus();
+};
+const raycaster = new THREE.Raycaster(),
+  groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let down;
+renderer.domElement.addEventListener(
+  "pointerdown",
+  (e) => (down = [e.clientX, e.clientY]),
+);
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 7) return;
+  raycaster.setFromCamera(
+    new THREE.Vector2(
+      (e.clientX / innerWidth) * 2 - 1,
+      1 - (e.clientY / innerHeight) * 2,
+    ),
+    view,
+  );
+  if (measuring) {
+    const point = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(groundPlane, point)) return;
+    measurePoints.push(point.clone());
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.65, 16, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffde8f, depthTest: false }),
+    );
+    marker.position.copy(point).add(new THREE.Vector3(0, 0.7, 0));
+    marker.renderOrder = 35;
+    measurementGroup.add(marker);
+    if (measurePoints.length === 1) {
+      $("map-status").textContent = "Tap the second point.";
+      return;
+    }
+    const geometry = new LineGeometry().setPositions(
+      measurePoints.flatMap((p) => [p.x, 0.8, p.z]),
+    );
+    const material = new LineMaterial({
+      color: 0xffde8f,
+      linewidth: 4,
+      depthTest: false,
+    });
+    material.resolution.set(innerWidth, innerHeight);
+    const wire = new Line2(geometry, material);
+    wire.renderOrder = 35;
+    measurementGroup.add(wire);
+    $("measure-result").textContent =
+      measurePoints[0].distanceTo(measurePoints[1]).toFixed(1) +
+      " m straight-line";
+    stopMeasurement();
+    updateMapStatus();
+    openPane("measure");
+    return;
+  }
+  const hit = raycaster.intersectObjects(
+    pickables.filter(
+      (o) =>
+        o.visible &&
+        (o.userData.id.startsWith("switch-")
+          ? $("switches").checked
+          : $("camera-layer").checked),
+    ),
+  )[0];
+  if (hit) select(hit.object.userData.id);
+});
+const projected = new THREE.Vector3();
+function updateLabels() {
+  const occupied = [];
+  const order = [...labels].sort(
+    (a, b) =>
+      Number(b.id === selected) - Number(a.id === selected) ||
+      Number(a.kind === "camera") - Number(b.kind === "camera"),
+  );
+  for (const l of order) {
+    projected.copy(l.position).project(view);
+    let visible = $("names").checked && projected.z > -1 && projected.z < 1;
+    if (l.kind === "camera" && !$("camera-layer").checked) visible = false;
+    if (
+      l.kind === "room" &&
+      ($("roofs").checked || !$("interiors").checked || !$("buildings").checked)
+    )
+      visible = false;
+    if (l.kind === "switch" && !$("switches").checked) visible = false;
+    if (l.kind === "future" && !$("future-sheds").checked) visible = false;
+    const anchorX = (projected.x * 0.5 + 0.5) * innerWidth,
+      anchorY = (-projected.y * 0.5 + 0.5) * innerHeight;
+    const width =
+        l.kind === "camera"
+          ? 40
+          : Math.max(74, l.el.textContent.length * 7 + 18),
+      height = 29;
+    let placement = null;
+    const offsets =
+      l.kind === "camera"
+        ? [
+            [0, 0],
+            [0, -33],
+            [0, 33],
+            [48, 0],
+            [-48, 0],
+            [48, -33],
+          ]
+        : [
+            [0, 0],
+            [0, -33],
+          ];
+    for (const [dx, dy] of offsets) {
+      const x = anchorX + dx,
+        y = anchorY + dy,
+        rect = { x: x - width / 2, y: y - height / 2, w: width, h: height };
+      const onScreen =
+        x > width / 2 + 8 &&
+        x < innerWidth - width / 2 - 8 &&
+        y > 140 &&
+        y < innerHeight - 100;
+      const overlap = occupied.some(
+        (r) =>
+          rect.x < r.x + r.w + 4 &&
+          rect.x + rect.w > r.x - 4 &&
+          rect.y < r.y + r.h + 3 &&
+          rect.y + rect.h > r.y - 3,
+      );
+      if (onScreen && !overlap) {
+        placement = { x, y, rect, shifted: dx !== 0 || dy !== 0 };
+        break;
+      }
+    }
+    visible = visible && !!placement;
+    l.el.style.display = visible ? "block" : "none";
+    l.leader.style.display = visible && placement.shifted ? "block" : "none";
+    if (visible) {
+      l.el.style.left = placement.x + "px";
+      l.el.style.top = placement.y + "px";
+      occupied.push(placement.rect);
+      for (const [key, value] of Object.entries({
+        x1: anchorX,
+        y1: anchorY,
+        x2: placement.x,
+        y2: placement.y,
+      }))
+        l.leader.setAttribute(key, value);
+    }
+  }
+}
+let animalTime = 0;
+let lastFrameTime = 0;
+let lastAnimalUpdate = 0;
+function draw(frameTime = 0) {
+  requestAnimationFrame(draw);
+  const delta = Math.min(0.05, Math.max(0, (frameTime - lastFrameTime) / 1000));
+  lastFrameTime = frameTime;
+  if (
+    $("animation").checked &&
+    (interiors.animalRoot.visible || kitchenInterior.peopleRoot.visible) &&
+    document.visibilityState !== "hidden"
+  )
+    animalTime += delta;
+  if (frameTime - lastAnimalUpdate >= 33) {
+    if (interiors.animalRoot.visible) interiors.update(animalTime);
+    if (kitchenInterior.peopleRoot.visible) kitchenInterior.update(animalTime);
+    lastAnimalUpdate = frameTime;
+  }
+  controls.update();
+  // Keep navigation inside the supplied satellite coverage.
+  const boundedTarget = controls.target.clone();
+  boundedTarget.x = THREE.MathUtils.clamp(boundedTarget.x, -450, 450);
+  boundedTarget.z = THREE.MathUtils.clamp(boundedTarget.z, -450, 450);
+  boundedTarget.y = THREE.MathUtils.clamp(boundedTarget.y, 0, 20);
+  const correction = boundedTarget.sub(controls.target);
+  controls.target.add(correction);
+  view.position.add(correction);
+  renderer.render(scene, view);
+  updateLabels();
+  const center = controls.target.clone().project(view),
+    northPoint = controls.target
+      .clone()
+      .add(northDirection.clone().multiplyScalar(10))
+      .project(view);
+  const angle =
+    (Math.atan2(
+      (northPoint.x - center.x) * innerWidth,
+      -(northPoint.y - center.y) * innerHeight,
+    ) *
+      180) /
+    Math.PI;
+  $("north-arrow").style.transform = "rotate(" + angle + "deg)";
+}
+window.addEventListener("resize", () => {
+  view.aspect = innerWidth / innerHeight;
+  view.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  lineMaterials.forEach((m) => m.resolution.set(innerWidth, innerHeight));
+  measurementGroup.children.forEach((o) =>
+    o.material?.resolution?.set(innerWidth, innerHeight),
+  );
+});
+renderer.domElement.addEventListener("webglcontextlost", (e) => {
+  e.preventDefault();
+  $("loading").textContent = "3D view paused. Reload this page to resume.";
+  $("loading").classList.remove("hidden");
+});
+const cat6Total = routes
+  .filter((r) => r.type === "cat6")
+  .reduce((sum, r) => sum + r.length, 0);
+const fibreLength = routes.find((r) => r.type === "fibre").length;
+$("cable-totals").textContent =
+  "Drawn routes total approximately " +
+  Math.round(cat6Total) +
+  " m of camera Cat 6 and " +
+  Math.round(fibreLength) +
+  " m of fibre. Future cable provisions are additional. These are model route lengths before installation slack.";
+applyLayers();
+$("loading").classList.add("hidden");
+draw();
+window.farmModel = {
+  cameraCount: cameras.length,
+  cameraPositions: cameras.map((camera) => ({
+    id: camera.id,
+    position: camera.point.toArray(),
+    direction: camera.direction.toArray(),
+  })),
+  gatePosition: gate.toArray(),
+  networkPosition: network.group.position.toArray(),
+  originalNetworkPosition: pos(341, 928).toArray(),
+  peopleCount: kitchenInterior.peopleCount,
+  routeCount: routes.length,
+  buildings: Object.keys(buildings),
+  mapScale,
+  cageCounts: interiors.counts,
+  cageCount: interiors.enclosures.length,
+  pigCount: interiors.pigCount,
+  chickenCount: interiors.chickenCount,
+  switchPositions: Object.values(roofSwitches).map((item) =>
+    item.group.position.toArray(),
+  ),
+  routes: routes.map((r) => ({
+    id: r.id,
+    length: r.length,
+    type: r.type,
+    start: r.points[0].toArray(),
+    end: r.points[r.points.length - 1].toArray(),
+    switchIds: r.switchIds,
+  })),
+  registration,
+  coordinates,
+};
