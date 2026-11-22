@@ -5,6 +5,7 @@ import { LineGeometry } from "./vendor/lines/LineGeometry.js";
 import { LineMaterial } from "./vendor/lines/LineMaterial.js";
 import { createInteriors } from "./interiors.js";
 import { createKitchenInterior } from "./kitchen.js";
+import { createNetworkInterior } from "./network-interior.js";
 import { createEnvironment, createGhibliSky } from "./environment.js";
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const $ = (id) => document.getElementById(id);
@@ -396,7 +397,7 @@ const network = building(
   [341 - 3 / mapScale, 928],
   6,
   6,
-  "NVR and 2 TB hard drive in the room, with PoE switch 1 shown on its roof. Kept at its original left-side location and moved only 3 m farther from the cage area. Five current cameras connect here. A fibre link connects switch 2 on Shed A’s roof.",
+  "Farm CCTV & Network Operations Room (6m x 6m). Features 19-inch server cabinet housing 4K NVR with 2 TB surveillance storage, PoE core switch, UPS power backup, and SFP fibre splice tray. Includes CCTV surveillance command desk with triple live monitors, IT specialist workstation, equipment storage shelving, Cat6 cable spools, and electrical breaker board.",
   true,
 );
 // Door is drawn on the short entrance face of Shed C.
@@ -445,6 +446,8 @@ for (const [id, name, p] of [
 }
 const interiors = createInteriors(buildings, scene);
 const kitchenInterior = createKitchenInterior(kitchen);
+const networkInterior = createNetworkInterior(network);
+
 label("Medicine", kitchen.point(-2.2, 0, 1.2), "medicine-room", "room");
 label("Kitchen room", kitchen.point(2.2, 0, 1.2), "kitchen-room", "room");
 addEntry(
@@ -458,6 +461,28 @@ addEntry(
   "Kitchen room",
   "Right half of the building, with an interior K1 camera and two illustrative walking people.",
   kitchenInterior.kitchenCentre,
+);
+
+label("Server bay", network.point(-0.7, 0, -2.1), "network-server-bay", "room");
+label("CCTV console", network.point(1.7, 0, 0.1), "network-cctv-desk", "room");
+label("Storage bay", network.point(0.0, 0, 2.1), "network-storage-bay", "room");
+addEntry(
+  "network-server-bay",
+  "Server & Network Bay",
+  "19-inch equipment rack housing 4K NVR with 2 TB surveillance hard drives, 48-port Cat6 patch panel, core switch, SFP optical splice tray, and rackmount UPS backup with active status LEDs.",
+  networkInterior.serverBayCentre,
+);
+addEntry(
+  "network-cctv-desk",
+  "CCTV Monitoring Console",
+  "Operator security desk featuring triple surveillance displays showing live multi-camera views across farm sheds, high-performance workstation tower, and ergonomic control chair.",
+  networkInterior.cctvDeskCentre,
+);
+addEntry(
+  "network-storage-bay",
+  "Computer & Spares Storage",
+  "Heavy-duty storage racking with spare Western Digital Purple surveillance drives, Cat6 cable spools, spare PoE injectors, dome/bullet replacement mounts, and network diagnostic toolkits.",
+  networkInterior.storageBayCentre,
 );
 entries.get("us-a").description +=
   " The network room remains on its original left side, slightly farther from the cage area.";
@@ -1240,6 +1265,9 @@ function applyLayers() {
   kitchenInterior.interior.visible = $("interiors").checked;
   kitchenInterior.peopleRoot.visible =
     $("people").checked && $("buildings").checked;
+  networkInterior.interior.visible = $("interiors").checked;
+  networkInterior.peopleRoot.visible =
+    $("people").checked && $("buildings").checked;
   switchObjects.forEach((group) => (group.visible = $("switches").checked));
   for (const r of routes) {
     r.obj.visible = $(
@@ -1712,6 +1740,9 @@ function select(id) {
     "us-b": ["us-b"],
     "dp-1": ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
     network: ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
+    "network-server-bay": ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
+    "network-cctv-desk": ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
+    "network-storage-bay": ["C1", "C2", "D1", "B1", "B2", "fibre", "us-a", "us-b"],
   };
 
   const isSwitch = id.startsWith("switch-");
@@ -1794,7 +1825,9 @@ $("focus").onclick = () => {
   const entry = entries.get(selected);
   if (!entry) return;
   const targetShed =
-    buildings[selected] || (selected.endsWith("-room") ? kitchen : null);
+    buildings[selected] ||
+    (selected.endsWith("-room") ? kitchen : null) ||
+    (selected.startsWith("network-") ? network : null);
   const focusDistance = targetShed
     ? Math.max(
         38,
@@ -1856,9 +1889,11 @@ $("interior-view").onclick = () => {
   const shedId =
     selected === "kitchen" || selected.endsWith("-room")
       ? "kitchen"
-      : selected.startsWith("shed-")
-        ? selected
-        : cameraShed || "shed-a";
+      : selected === "network" || selected.startsWith("network-")
+        ? "network"
+        : selected.startsWith("shed-")
+          ? selected
+          : cameraShed || "shed-a";
   select(shedId);
   $("focus").onclick();
 };
@@ -2184,6 +2219,7 @@ function draw(frameTime = 0) {
     $("animation").checked && !reducedMotion.matches &&
     (interiors.animalRoot.visible ||
       kitchenInterior.peopleRoot.visible ||
+      (networkInterior.peopleRoot && networkInterior.peopleRoot.visible) ||
       environment.forestGroup.visible) &&
     document.visibilityState !== "hidden"
   )
@@ -2191,6 +2227,7 @@ function draw(frameTime = 0) {
   if (frameTime - lastAnimalUpdate >= 33) {
     if (interiors.animalRoot.visible) interiors.update(animalTime);
     if (kitchenInterior.peopleRoot.visible) kitchenInterior.update(animalTime);
+    if (networkInterior.update) networkInterior.update(animalTime);
     if (environment.update) environment.update(animalTime, view);
     lastAnimalUpdate = frameTime;
   }
