@@ -33,6 +33,7 @@ A mobile-first 3D farm infrastructure and CCTV planning viewer built with **Thre
 
 - **Calibrated Satellite Ground Plane**: Rendered over Esri World Imagery (Web Mercator) with 9 high-res zoom-18 site tiles and 25 surrounding zoom-16 context tiles (~3 km span).
 - **12-Camera CCTV Network**: Interactive camera models with direction arrows, coordinates, connection highlights, and calculated cable route lengths.
+- **First-Person Camera Viewport**: Tap any camera to see its live lens perspective. Accurately simulates 2.8 mm wide-angle dome cameras (~103° HFOV) and 4.0 mm bullet cameras (~79° HFOV for G1 and D2) with a live CCTV HUD, real-time timestamp, pan/tilt controls, digital zoom, and quick camera switching.
 - **Detailed Cable Routing**: Distinct visible roof switches, individual camera drops, inter-switch fibre links, and future expansion provisions.
 - **Interactive Building Shells**: Toggle between exterior overhead roofs and interior inspection mode ("Inside" view) for sheds and facilities.
 - **Instanced Animated Livestock**: 3D animated pigs and chickens rendered using Three.js instanced meshes for fast 60 FPS mobile rendering.
@@ -114,15 +115,20 @@ The expandable **Layers** panel allows toggling specific scene elements on and o
 
 ## Site Plan & Camera Allocation
 
-| Location | Camera Count | Identifiers & Coverage |
-| :--- | :---: | :--- |
-| **Shed A** | 4 | 2 cameras at each end entrance (covers central corridor and perimeter). |
-| **Shed B** | 2 | Primary entrance and lengthwise corridor view. |
-| **Shed C** | 1 | Open chicken enclosure coverage. |
-| **Shed D** | 2 | Left-end entrance: **D1** faces inward; **D2** monitors network room & gate path. |
-| **Main Gate** | 1 | **G1** mounted at the corner of Shed A, oriented directly toward the entry gate. |
-| **Kitchen & Storage** | 2 | **K1** interior overview of preparation space; **K2** exterior facing the gate. |
-| **Upcoming Sheds A & B** | 0 | *Cable provisioning only (pre-drawn conduit and pull points).* |
+| Location | Camera Count | Hardware & Lens Spec | Identifiers & Coverage |
+| :--- | :---: | :--- | :--- |
+| **Shed A** | 4 | 2.8 mm Dome (103° Wide View) | A1–A4: 2 cameras at each end entrance (covers central aisle and pens). |
+| **Shed B** | 2 | 2.8 mm Dome (103° Wide View) | B1–B2: Primary entrance and lengthwise corridor view. |
+| **Shed C** | 1 | 2.8 mm Dome (103° Wide View) | C1: Open chicken enclosure coverage. |
+| **Shed D** | 2 | D1: 2.8 mm Dome · D2: 4.0 mm Bullet | **D1** faces inward along pen row; **D2** monitors network room and gate path. |
+| **Main Gate** | 1 | 4.0 mm Bullet (79° Focused View) | **G1** mounted at the corner of Shed A, oriented directly toward the entry gate. |
+| **Kitchen & Storage** | 2 | 2.8 mm Dome (103° Wide View) | **K1** interior workspace overview; **K2** exterior corner facing the gate. |
+| **Upcoming Sheds A & B** | 0 | Spare Conduit Provision | Cable provisioning only (pre-drawn conduit and pull points). |
+
+### Camera Models and Viewport Optics
+
+- **Dome Cameras (2.8 mm Focal Length)**: Deployed across Sheds A, B, C, D (D1) and Kitchen (K1, K2). Feature circular ceiling/eave base collars, dark smoked dome bubbles, and an inner turret eye providing a wide ~103° horizontal field of view.
+- **Bullet Cameras (4.0 mm Focal Length)**: Deployed at Gate (G1) and Shed D yard approach (D2). Feature cylindrical housings, protective sunshields, front glass faceplates, and articulated mounting brackets providing a narrower ~79° horizontal field of view for outdoor perimeter distance.
 
 ---
 

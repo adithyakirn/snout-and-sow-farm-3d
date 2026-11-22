@@ -632,3 +632,320 @@ footer small {
   font-size: 20px;
   line-height: 20px;
 }
+
+/* ==========================================================================
+   CCTV Camera Viewport & HUD Overlay
+   ========================================================================== */
+body.camera-mode header,
+body.camera-mode .view-control,
+body.camera-mode .map-tools,
+body.camera-mode #map-status,
+body.camera-mode #labels,
+body.camera-mode #label-leaders {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+#camera-viewport-hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: opacity 0.25s ease;
+}
+#camera-viewport-hud.hidden {
+  display: none;
+}
+.cctv-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: calc(14px + env(safe-area-inset-top)) 20px 24px;
+  background: linear-gradient(180deg, rgba(8, 18, 22, 0.92) 0%, rgba(8, 18, 22, 0) 100%);
+  pointer-events: auto;
+}
+.cctv-cam-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cctv-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cctv-rec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(220, 38, 38, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  color: #ff6b6b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: cctv-blink 1s ease-in-out infinite;
+}
+@keyframes cctv-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.cctv-cam-tag {
+  background: #5ce1e5;
+  color: #081a20;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+#cctv-cam-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.cctv-spec-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #a8bdb8;
+  flex-wrap: wrap;
+}
+.cctv-badge-dome {
+  background: rgba(92, 225, 229, 0.15);
+  border: 1px solid rgba(92, 225, 229, 0.4);
+  color: #79e8e8;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.cctv-badge-bullet {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+.cctv-zoom-badge {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2ede8;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.cctv-telemetry {
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.cctv-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d6e3d4;
+  letter-spacing: 0.04em;
+}
+.cctv-feed-quality {
+  font-size: 11px;
+  color: #7c908c;
+  margin-top: 2px;
+}
+
+/* Corner Reticle Guides */
+.cctv-reticle-overlay {
+  position: absolute;
+  inset: 50px 24px;
+  pointer-events: none;
+}
+.cctv-corner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: rgba(92, 225, 229, 0.35);
+  border-style: solid;
+}
+.cctv-corner.top-left {
+  top: 0; left: 0;
+  border-width: 2px 0 0 2px;
+}
+.cctv-corner.top-right {
+  top: 0; right: 0;
+  border-width: 2px 2px 0 0;
+}
+.cctv-corner.bottom-left {
+  bottom: 0; left: 0;
+  border-width: 0 0 2px 2px;
+}
+.cctv-corner.bottom-right {
+  bottom: 0; right: 0;
+  border-width: 0 2px 2px 0;
+}
+.cctv-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  opacity: 0.35;
+}
+.cctv-crosshair::before,
+.cctv-crosshair::after {
+  content: "";
+  position: absolute;
+  background: #79e8e8;
+}
+.cctv-crosshair::before {
+  top: 6px; left: 0; width: 14px; height: 2px;
+}
+.cctv-crosshair::after {
+  top: 0; left: 6px; width: 2px; height: 14px;
+}
+
+/* Bottom Controls */
+.cctv-bottom-bar {
+  position: fixed;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(12, 25, 29, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 8px 12px;
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  max-width: 95vw;
+}
+.cctv-nav-btn,
+.cctv-util-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #edf4ed;
+  padding: 7px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.cctv-nav-btn:hover,
+.cctv-util-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.cctv-cam-selector-wrapper select {
+  background: rgba(0, 0, 0, 0.35);
+  color: #79e8e8;
+  border: 1px solid rgba(92, 225, 229, 0.35);
+  border-radius: 16px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+.cctv-exit-btn {
+  background: #e04444;
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.cctv-exit-btn:hover {
+  background: #ff4d4d;
+}
+
+/* Inspect pane camera action button and specification pill */
+.camera-view-action-btn {
+  width: 100%;
+  margin-top: 10px;
+  background: #1f8589 !important;
+  color: #fff !important;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.camera-view-action-btn:hover {
+  background: #28a0a5 !important;
+}
+.camera-spec-pill {
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.camera-spec-pill.dome {
+  background: rgba(92, 225, 229, 0.12);
+  border: 1px solid rgba(92, 225, 229, 0.3);
+  color: #9feef0;
+}
+.camera-spec-pill.bullet {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fde68a;
+}
+
+@media (max-width: 600px) {
+  .cctv-top-bar {
+    padding: calc(10px + env(safe-area-inset-top)) 12px 14px;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cctv-telemetry {
+    text-align: left;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .cctv-feed-quality {
+    margin-top: 0;
+  }
+  .cctv-bottom-bar {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .cctv-util-btn {
+    display: none;
+  }
+  .cctv-cam-selector-wrapper select {
+    max-width: 130px;
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+  .cctv-nav-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  .cctv-exit-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}

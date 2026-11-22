@@ -29,6 +29,42 @@
     ></main>
     <svg id="label-leaders" aria-hidden="true"></svg>
     <div id="labels"></div>
+    <div id="camera-viewport-hud" class="hidden" role="region" aria-label="Camera live viewport">
+      <div class="cctv-top-bar">
+        <div class="cctv-cam-info">
+          <div class="cctv-title-row">
+            <span class="cctv-rec-pill"><span class="rec-dot"></span>LIVE</span>
+            <span id="cctv-cam-badge" class="cctv-cam-tag">CAM A1</span>
+            <strong id="cctv-cam-title">Shed A Left End</strong>
+          </div>
+          <div class="cctv-spec-row">
+            <span id="cctv-type-badge" class="cctv-badge-dome">DOME 2.8mm</span>
+            <span id="cctv-lens-spec">103° Wide View · Switch 2 Port 1</span>
+            <span id="cctv-zoom-badge" class="cctv-zoom-badge">1.0x</span>
+          </div>
+        </div>
+        <div class="cctv-telemetry">
+          <div id="cctv-timestamp" class="cctv-time">2026-11-22 11:55:00</div>
+          <div class="cctv-feed-quality">4K UHD · 30 FPS · H.265</div>
+        </div>
+      </div>
+      <div class="cctv-reticle-overlay" aria-hidden="true">
+        <div class="cctv-corner top-left"></div>
+        <div class="cctv-corner top-right"></div>
+        <div class="cctv-corner bottom-left"></div>
+        <div class="cctv-corner bottom-right"></div>
+        <div class="cctv-crosshair"></div>
+      </div>
+      <div class="cctv-bottom-bar">
+        <button id="cctv-prev-cam" class="cctv-nav-btn" aria-label="Previous camera">◀ Prev</button>
+        <div class="cctv-cam-selector-wrapper">
+          <select id="cctv-cam-select" aria-label="Select camera feed"></select>
+        </div>
+        <button id="cctv-next-cam" class="cctv-nav-btn" aria-label="Next camera">Next ▶</button>
+        <button id="cctv-reset-angle" class="cctv-util-btn" title="Reset viewing angle">Reset Angle</button>
+        <button id="cctv-exit-btn" class="cctv-exit-btn" aria-label="Exit camera view">✕ Exit View</button>
+      </div>
+    </div>
     <header>
       <div class="brand-symbol" aria-hidden="true">S<span>·</span>S</div>
       <div>
@@ -240,27 +276,27 @@
             <tbody>
               <tr>
                 <td>Shed A</td>
-                <td>4</td>
+                <td>4 · 2.8mm Dome</td>
               </tr>
               <tr>
                 <td>Shed B</td>
-                <td>2</td>
+                <td>2 · 2.8mm Dome</td>
               </tr>
               <tr>
                 <td>Shed C · chicken</td>
-                <td>1</td>
+                <td>1 · 2.8mm Dome</td>
               </tr>
               <tr>
                 <td>Shed D</td>
-                <td>2</td>
+                <td>2 (D1: 2.8mm Dome · D2: 4mm Bullet)</td>
               </tr>
               <tr>
                 <td>Gate</td>
-                <td>1</td>
+                <td>1 (G1: 4mm Bullet)</td>
               </tr>
               <tr>
                 <td>Kitchen</td>
-                <td>2</td>
+                <td>2 · 2.8mm Dome</td>
               </tr>
               <tr>
                 <td>US A and US B</td>

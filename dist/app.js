@@ -123,7 +123,12 @@ function label(text, position, id, kind = "") {
   el.className = "map-label " + kind;
   el.textContent = text;
   el.setAttribute("aria-label", "Inspect " + text);
-  el.onclick = () => select(id);
+  el.onclick = () => {
+    select(id);
+    if (cameras.some((c) => c.id === id)) {
+      enterCameraView(id);
+    }
+  };
   $("labels").append(el);
   const leader = document.createElementNS("http://www.w3.org/2000/svg", "line");
   $("label-leaders").append(leader);
@@ -511,15 +516,122 @@ function switchLead(switchNumber, portIndex, fibre = false) {
 const camGroup = new THREE.Group();
 scene.add(camGroup);
 function addCamera(id, point, dir, switchId, description) {
+  const isBullet = id === "G1" || id === "D2";
+  const lens = isBullet ? "4.0mm" : "2.8mm";
+  const hfov = isBullet ? 79 : 103;
+  const type = isBullet ? "bullet" : "dome";
+
   const body = new THREE.Group();
   body.position.copy(point);
   camGroup.add(body);
   cameraObjects.push(body);
-  dir = dir.clone().normalize();
-  body.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-  const casing = box(0.65, 0.45, 1.2, 0, 0, 0, mats.camera, body);
-  box(0.48, 0.32, 0.06, 0, 0, 0.64, mats.lens, body);
-  box(0.15, 0.55, 0.15, 0, -0.45, -0.3, mats.trim, body);
+
+  let orientedDir = dir.clone().normalize();
+  if (
+    Math.abs(orientedDir.y) < 0.05 &&
+    (id.startsWith("A") || id.startsWith("B") || id === "C1" || id === "D1")
+  ) {
+    orientedDir.y = -0.18;
+    orientedDir.normalize();
+  }
+  body.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), orientedDir);
+
+  const cameraMeshes = [];
+
+  if (isBullet) {
+    // 4.0mm Bullet Camera (G1, D2): Cylindrical housing with top sunshield visor and swivel bracket
+    const bulletBodyGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.9, 16);
+    bulletBodyGeo.rotateX(Math.PI / 2);
+    const bulletBody = new THREE.Mesh(bulletBodyGeo, mats.camera);
+    bulletBody.castShadow = true;
+    body.add(bulletBody);
+    cameraMeshes.push(bulletBody);
+
+    // Sunshield / weather hood visor on top
+    const visor = box(0.54, 0.05, 1.05, 0, 0.27, 0.08, mats.camera, body);
+    visor.castShadow = true;
+    cameraMeshes.push(visor);
+
+    // Front black faceplate
+    const faceGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.04, 16);
+    faceGeo.rotateX(Math.PI / 2);
+    const face = new THREE.Mesh(faceGeo, mats.dark);
+    face.position.set(0, 0, 0.45);
+    body.add(face);
+    cameraMeshes.push(face);
+
+    // 4mm Optical lens in center
+    const lensGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.05, 14);
+    lensGeo.rotateX(Math.PI / 2);
+    const lensMesh = new THREE.Mesh(lensGeo, mats.lens);
+    lensMesh.position.set(0, 0, 0.47);
+    body.add(lensMesh);
+
+    // Rear swivel bracket / mounting arm
+    const bracketArm = box(0.12, 0.38, 0.12, 0, -0.25, -0.32, mats.trim, body);
+    const wallPlate = box(0.38, 0.38, 0.06, 0, -0.42, -0.32, mats.trim, body);
+    cameraMeshes.push(bracketArm, wallPlate);
+  } else {
+    // 2.8mm Dome Camera: Circular ceiling/eave base plate, tapered collar, smoked dome bubble, inner eyeball turret
+    const baseGeo = new THREE.CylinderGeometry(0.46, 0.5, 0.1, 16);
+    baseGeo.rotateX(Math.PI / 2);
+    const basePlate = new THREE.Mesh(baseGeo, mats.camera);
+    basePlate.position.set(0, 0, -0.15);
+    basePlate.castShadow = true;
+    body.add(basePlate);
+    cameraMeshes.push(basePlate);
+
+    const collarGeo = new THREE.CylinderGeometry(0.38, 0.46, 0.18, 16);
+    collarGeo.rotateX(Math.PI / 2);
+    const collar = new THREE.Mesh(collarGeo, mats.camera);
+    collar.position.set(0, 0, -0.04);
+    collar.castShadow = true;
+    body.add(collar);
+    cameraMeshes.push(collar);
+
+    const domeGeo = new THREE.SphereGeometry(
+      0.34,
+      16,
+      12,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI * 0.6,
+    );
+    domeGeo.rotateX(Math.PI / 2);
+    const domeMat = new THREE.MeshStandardMaterial({
+      color: 0x0c1820,
+      roughness: 0.15,
+      metalness: 0.85,
+      transparent: true,
+      opacity: 0.88,
+    });
+    const dome = new THREE.Mesh(domeGeo, domeMat);
+    dome.position.set(0, 0, 0.04);
+    body.add(dome);
+    cameraMeshes.push(dome);
+
+    const eyeball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 12, 10),
+      mats.dark,
+    );
+    eyeball.position.set(0, 0, 0.06);
+    body.add(eyeball);
+
+    const lensGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.06, 14);
+    lensGeo.rotateX(Math.PI / 2);
+    const lensMesh = new THREE.Mesh(lensGeo, mats.lens);
+    lensMesh.position.set(0, 0, 0.22);
+    body.add(lensMesh);
+
+    const led = new THREE.Mesh(
+      new THREE.SphereGeometry(0.025, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00ff88 }),
+    );
+    led.position.set(0.18, 0.16, 0.05);
+    body.add(led);
+  }
+
   const marker = new THREE.Mesh(
     new THREE.SphereGeometry(0.4, 12, 8),
     new THREE.MeshStandardMaterial({
@@ -531,12 +643,17 @@ function addCamera(id, point, dir, switchId, description) {
   marker.position.copy(point).add(new THREE.Vector3(0, -0.8, 0));
   scene.add(marker);
   cameraObjects.push(marker);
+
   marker.userData.id = id;
-  casing.userData.id = id;
-  pickables.push(marker, casing);
+  for (const m of cameraMeshes) {
+    m.userData.id = id;
+    pickables.push(m);
+  }
+  pickables.push(marker);
+
   const arrow = new THREE.ArrowHelper(
-    dir,
-    point.clone().addScaledVector(dir, 0.8),
+    orientedDir,
+    point.clone().addScaledVector(orientedDir, 0.8),
     3,
     0x79e8e8,
     0.65,
@@ -544,16 +661,33 @@ function addCamera(id, point, dir, switchId, description) {
   );
   scene.add(arrow);
   directionObjects.push(arrow);
-  const camera = { id, point, direction: dir.clone(), switchId, body };
+
+  const camera = {
+    id,
+    point,
+    direction: orientedDir.clone(),
+    switchId,
+    body,
+    marker,
+    arrow,
+    type,
+    lens,
+    hfov,
+    description,
+  };
   cameras.push(camera);
+
   label(id, point.clone().add(new THREE.Vector3(0, 1.5, 0)), id, "camera");
   addEntry(
     id,
     id,
     description +
-      " Independent Cat 6 connection to PoE switch " +
+      (isBullet
+        ? " · 4.0mm Bullet Camera (79° view)"
+        : " · 2.8mm Dome Camera (103° wide view)") +
+      " · Independent Cat 6 connection to PoE switch " +
       switchId +
-      ". Direction arrow is indicative.",
+      ".",
     point,
   );
 }
@@ -988,6 +1122,203 @@ try {
   }
 } catch {}
 
+// ==========================================================================
+// CCTV Camera Viewport & HUD State
+// ==========================================================================
+let inCameraView = false;
+let activeCamId = null;
+const savedViewPos = new THREE.Vector3();
+const savedControlsTarget = new THREE.Vector3();
+let savedFov = 42;
+let camLookYaw = 0;
+let camLookPitch = 0;
+let camZoom = 1.0;
+let isCamDragging = false;
+let camDragStart = [0, 0];
+let touchStartDistance = 0;
+let cctvClockTimer = null;
+
+function applyCameraFov(cam) {
+  const aspect = innerWidth / innerHeight;
+  const hfovRad = THREE.MathUtils.degToRad(cam.hfov / camZoom);
+  const vfovRad = 2 * Math.atan(Math.tan(hfovRad / 2) / aspect);
+  view.fov = THREE.MathUtils.clamp(THREE.MathUtils.radToDeg(vfovRad), 15, 120);
+  view.aspect = aspect;
+  view.updateProjectionMatrix();
+}
+
+function updateCameraLook() {
+  const cam = cameras.find((c) => c.id === activeCamId);
+  if (!cam) return;
+  const lensPos = cam.point.clone().addScaledVector(cam.direction, 0.42);
+  view.position.copy(lensPos);
+
+  const baseDir = cam.direction.clone().normalize();
+  const lookDir = baseDir.clone();
+  lookDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camLookYaw);
+
+  const rightAxis = new THREE.Vector3(0, 1, 0)
+    .cross(lookDir)
+    .normalize()
+    .negate();
+  lookDir.applyAxisAngle(rightAxis, camLookPitch);
+
+  const lookTarget = lensPos.clone().addScaledVector(lookDir, 25);
+  view.lookAt(lookTarget);
+}
+
+function updateCameraHUD(cam) {
+  const isBullet = cam.type === "bullet";
+  $("cctv-cam-badge").textContent = "CAM " + cam.id;
+  $("cctv-cam-title").textContent = cam.description;
+  const typeBadge = $("cctv-type-badge");
+  typeBadge.className = isBullet ? "cctv-badge-bullet" : "cctv-badge-dome";
+  typeBadge.textContent = isBullet ? "BULLET 4.0mm" : "DOME 2.8mm";
+  $("cctv-lens-spec").textContent =
+    (isBullet ? "79° Standard View" : "103° Wide View") +
+    " · Switch " +
+    cam.switchId +
+    " Port " +
+    cam.port;
+  $("cctv-zoom-badge").textContent = camZoom.toFixed(1) + "x";
+  const sel = $("cctv-cam-select");
+  if (sel) sel.value = cam.id;
+}
+
+function startCCTVClock() {
+  if (cctvClockTimer) return;
+  const tick = () => {
+    const el = $("cctv-timestamp");
+    if (!el) return;
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    el.textContent = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  };
+  tick();
+  cctvClockTimer = setInterval(tick, 1000);
+}
+
+function enterCameraView(camId) {
+  const cam = cameras.find((c) => c.id === camId);
+  if (!cam) return;
+
+  if (!inCameraView) {
+    savedViewPos.copy(view.position);
+    savedControlsTarget.copy(controls.target);
+    savedFov = view.fov;
+  }
+
+  // Restore previous camera body visibility
+  if (activeCamId && activeCamId !== camId) {
+    const prev = cameras.find((c) => c.id === activeCamId);
+    if (prev) {
+      prev.body.visible = $("camera-layer").checked;
+      prev.marker.visible = $("camera-layer").checked;
+      prev.arrow.visible = $("directions").checked && $("camera-layer").checked;
+    }
+  }
+
+  inCameraView = true;
+  activeCamId = camId;
+  controls.enabled = false;
+  controls.autoRotate = false;
+  $("rotate").classList.remove("active");
+  document.body.classList.add("camera-mode");
+
+  camLookYaw = 0;
+  camLookPitch = 0;
+  camZoom = 1.0;
+
+  // Hide active camera's own body, marker and arrow so they don't occlude lens view
+  cam.body.visible = false;
+  cam.marker.visible = false;
+  cam.arrow.visible = false;
+
+  applyCameraFov(cam);
+  updateCameraLook();
+  updateCameraHUD(cam);
+  startCCTVClock();
+
+  $("camera-viewport-hud").classList.remove("hidden");
+  $("perspective").classList.remove("active");
+  $("top").classList.remove("active");
+  $("interior-view").classList.remove("active");
+  $("gesture-hint").textContent =
+    "Drag to pan/tilt camera · Scroll or pinch to zoom";
+
+  closePane();
+}
+
+function exitCameraView() {
+  if (!inCameraView) return;
+
+  if (activeCamId) {
+    const cam = cameras.find((c) => c.id === activeCamId);
+    if (cam) {
+      cam.body.visible = $("camera-layer").checked;
+      cam.marker.visible = $("camera-layer").checked;
+      cam.arrow.visible = $("directions").checked && $("camera-layer").checked;
+    }
+  }
+
+  inCameraView = false;
+  activeCamId = null;
+  document.body.classList.remove("camera-mode");
+
+  controls.enabled = true;
+  view.fov = savedFov || 42;
+  view.aspect = innerWidth / innerHeight;
+  view.updateProjectionMatrix();
+
+  view.position.copy(savedViewPos);
+  controls.target.copy(savedControlsTarget);
+  controls.update();
+
+  $("camera-viewport-hud").classList.add("hidden");
+  $("perspective").classList.add("active");
+  $("gesture-hint").textContent = mapView
+    ? "Drag to pan · Pinch to zoom"
+    : "Drag to orbit · Pinch to zoom";
+}
+
+function stepCamera(direction) {
+  if (!activeCamId) return;
+  const idx = cameras.findIndex((c) => c.id === activeCamId);
+  if (idx === -1) return;
+  const nextIdx = (idx + direction + cameras.length) % cameras.length;
+  const nextCam = cameras[nextIdx];
+  select(nextCam.id);
+  enterCameraView(nextCam.id);
+}
+
+function resetCameraAngle() {
+  camLookYaw = 0;
+  camLookPitch = 0;
+  camZoom = 1.0;
+  if (activeCamId) {
+    const cam = cameras.find((c) => c.id === activeCamId);
+    if (cam) applyCameraFov(cam);
+  }
+  const badge = $("cctv-zoom-badge");
+  if (badge) badge.textContent = "1.0x";
+}
+
+function populateCCTVSelector() {
+  const sel = $("cctv-cam-select");
+  if (!sel) return;
+  sel.replaceChildren();
+  for (const c of cameras) {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = `${c.id} · ${c.type === "bullet" ? "4mm Bullet" : "2.8mm Dome"} (${c.id.startsWith("G") ? "Gate" : c.id.startsWith("K") ? "Kitchen" : "Shed " + c.id[0]})`;
+    sel.append(opt);
+  }
+  sel.onchange = (e) => {
+    select(e.target.value);
+    enterCameraView(e.target.value);
+  };
+}
+
 function select(id) {
   selected = id;
   $("selection").value = id;
@@ -1027,6 +1358,19 @@ function select(id) {
     coords.textContent =
       "Approx. map point " + geo.lat.toFixed(6) + ", " + geo.lon.toFixed(6);
     $("detail-extra").append(coords);
+    if (cam) {
+      const isBullet = cam.type === "bullet";
+      const specPill = document.createElement("div");
+      specPill.className = "camera-spec-pill " + (isBullet ? "bullet" : "dome");
+      specPill.innerHTML = `<strong>${isBullet ? "4.0mm Bullet Camera" : "2.8mm Dome Camera"}</strong><br>${isBullet ? "Narrow / Focused View (79° HFOV)" : "Wide-Angle View (103° HFOV)"} · PoE Switch ${cam.switchId} (Port ${cam.port})`;
+      $("detail-extra").append(specPill);
+
+      const viewBtn = document.createElement("button");
+      viewBtn.className = "primary camera-view-action-btn";
+      viewBtn.textContent = `📹 View ${cam.id} Viewport (${cam.lens} ${isBullet ? "Bullet" : "Dome"})`;
+      viewBtn.onclick = () => enterCameraView(cam.id);
+      $("detail-extra").append(viewBtn);
+    }
   }
   if (id.startsWith("switch-")) {
     const switchNumber = Number(id.slice(-1));
@@ -1081,6 +1425,7 @@ $("focus").onclick = () => {
   closePane();
 };
 function setView(top) {
+  if (inCameraView) exitCameraView();
   mapView = top;
   controls.autoRotate = false;
   controls.enableRotate = !top;
@@ -1098,6 +1443,7 @@ function setView(top) {
   controls.touches.ONE = top ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
 }
 $("interior-view").onclick = () => {
+  if (inCameraView) exitCameraView();
   setView(false);
   $("roofs").checked = false;
   $("buildings").checked = true;
@@ -1129,6 +1475,7 @@ $("perspective").onclick = () => setView(false);
 $("top").onclick = () => setView(true);
 $("north").onclick = () => setView(true);
 $("reset").onclick = () => {
+  if (inCameraView) exitCameraView();
   setView(mapView);
   select("overview");
   closePane();
@@ -1212,11 +1559,38 @@ $("measure-clear").onclick = () => {
 const raycaster = new THREE.Raycaster(),
   groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 let down;
-renderer.domElement.addEventListener(
-  "pointerdown",
-  (e) => (down = [e.clientX, e.clientY]),
-);
+
+renderer.domElement.addEventListener("pointerdown", (e) => {
+  if (inCameraView) {
+    isCamDragging = true;
+    camDragStart = [e.clientX, e.clientY];
+    return;
+  }
+  down = [e.clientX, e.clientY];
+});
+
+window.addEventListener("pointermove", (e) => {
+  if (inCameraView && isCamDragging) {
+    const dx = e.clientX - camDragStart[0];
+    const dy = e.clientY - camDragStart[1];
+    camDragStart = [e.clientX, e.clientY];
+    const sens = 0.0035;
+    camLookYaw -= dx * sens;
+    camLookPitch -= dy * sens;
+    camLookYaw = THREE.MathUtils.clamp(camLookYaw, -1.1, 1.1);
+    camLookPitch = THREE.MathUtils.clamp(camLookPitch, -0.7, 0.45);
+  }
+});
+
+window.addEventListener("pointerup", () => {
+  if (inCameraView) isCamDragging = false;
+});
+
 renderer.domElement.addEventListener("pointerup", (e) => {
+  if (inCameraView) {
+    isCamDragging = false;
+    return;
+  }
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 7) return;
   raycaster.setFromCamera(
     new THREE.Vector2(
@@ -1269,10 +1643,68 @@ renderer.domElement.addEventListener("pointerup", (e) => {
           : $("camera-layer").checked),
     ),
   )[0];
-  if (hit) select(hit.object.userData.id);
+  if (hit) {
+    const id = hit.object.userData.id;
+    select(id);
+    if (cameras.some((c) => c.id === id)) {
+      enterCameraView(id);
+    }
+  }
 });
+
+// Wheel zoom in camera view
+renderer.domElement.addEventListener(
+  "wheel",
+  (e) => {
+    if (inCameraView) {
+      e.preventDefault();
+      const zoomDelta = e.deltaY * -0.0015;
+      camZoom = THREE.MathUtils.clamp(camZoom + zoomDelta, 1.0, 2.5);
+      const cam = cameras.find((c) => c.id === activeCamId);
+      if (cam) applyCameraFov(cam);
+      const badge = $("cctv-zoom-badge");
+      if (badge) badge.textContent = camZoom.toFixed(1) + "x";
+    }
+  },
+  { passive: false },
+);
+
+// Mobile touch pinch zoom in camera view
+renderer.domElement.addEventListener(
+  "touchstart",
+  (e) => {
+    if (inCameraView && e.touches.length === 2) {
+      touchStartDistance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+    }
+  },
+  { passive: true },
+);
+renderer.domElement.addEventListener(
+  "touchmove",
+  (e) => {
+    if (inCameraView && e.touches.length === 2 && touchStartDistance > 0) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+      const factor = dist / touchStartDistance;
+      touchStartDistance = dist;
+      camZoom = THREE.MathUtils.clamp(camZoom * factor, 1.0, 2.5);
+      const cam = cameras.find((c) => c.id === activeCamId);
+      if (cam) applyCameraFov(cam);
+      const badge = $("cctv-zoom-badge");
+      if (badge) badge.textContent = camZoom.toFixed(1) + "x";
+    }
+  },
+  { passive: true },
+);
+
 const projected = new THREE.Vector3();
 function updateLabels() {
+  if (inCameraView) return;
   const occupied = [];
   const order = [...labels].sort(
     (a, b) =>
@@ -1368,34 +1800,45 @@ function draw(frameTime = 0) {
     if (kitchenInterior.peopleRoot.visible) kitchenInterior.update(animalTime);
     lastAnimalUpdate = frameTime;
   }
-  controls.update();
-  // Keep navigation inside the supplied satellite coverage.
-  const boundedTarget = controls.target.clone();
-  boundedTarget.x = THREE.MathUtils.clamp(boundedTarget.x, -450, 450);
-  boundedTarget.z = THREE.MathUtils.clamp(boundedTarget.z, -450, 450);
-  boundedTarget.y = THREE.MathUtils.clamp(boundedTarget.y, 0, 20);
-  const correction = boundedTarget.sub(controls.target);
-  controls.target.add(correction);
-  view.position.add(correction);
+  if (inCameraView) {
+    updateCameraLook();
+  } else {
+    controls.update();
+    // Keep navigation inside the supplied satellite coverage.
+    const boundedTarget = controls.target.clone();
+    boundedTarget.x = THREE.MathUtils.clamp(boundedTarget.x, -450, 450);
+    boundedTarget.z = THREE.MathUtils.clamp(boundedTarget.z, -450, 450);
+    boundedTarget.y = THREE.MathUtils.clamp(boundedTarget.y, 0, 20);
+    const correction = boundedTarget.sub(controls.target);
+    controls.target.add(correction);
+    view.position.add(correction);
+    updateLabels();
+  }
   renderer.render(scene, view);
-  updateLabels();
-  const center = controls.target.clone().project(view),
-    northPoint = controls.target
-      .clone()
-      .add(northDirection.clone().multiplyScalar(10))
-      .project(view);
-  const angle =
-    (Math.atan2(
-      (northPoint.x - center.x) * innerWidth,
-      -(northPoint.y - center.y) * innerHeight,
-    ) *
-      180) /
-    Math.PI;
-  $("north-arrow").style.transform = "rotate(" + angle + "deg)";
+  if (!inCameraView) {
+    const center = controls.target.clone().project(view),
+      northPoint = controls.target
+        .clone()
+        .add(northDirection.clone().multiplyScalar(10))
+        .project(view);
+    const angle =
+      (Math.atan2(
+        (northPoint.x - center.x) * innerWidth,
+        -(northPoint.y - center.y) * innerHeight,
+      ) *
+        180) /
+      Math.PI;
+    $("north-arrow").style.transform = "rotate(" + angle + "deg)";
+  }
 }
 window.addEventListener("resize", () => {
   view.aspect = innerWidth / innerHeight;
-  view.updateProjectionMatrix();
+  if (inCameraView && activeCamId) {
+    const cam = cameras.find((c) => c.id === activeCamId);
+    if (cam) applyCameraFov(cam);
+  } else {
+    view.updateProjectionMatrix();
+  }
   renderer.setSize(innerWidth, innerHeight);
   lineMaterials.forEach((m) => m.resolution.set(innerWidth, innerHeight));
   measurementGroup.children.forEach((o) =>
@@ -1418,6 +1861,21 @@ $("cable-totals").textContent =
   Math.round(fibreLength) +
   " m of fibre. Future cable provisions are additional. These are model route lengths before installation slack.";
 applyLayers();
+$("cctv-prev-cam").onclick = () => stepCamera(-1);
+$("cctv-next-cam").onclick = () => stepCamera(1);
+$("cctv-reset-angle").onclick = resetCameraAngle;
+$("cctv-exit-btn").onclick = exitCameraView;
+populateCCTVSelector();
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (inCameraView) exitCameraView();
+  } else if (inCameraView) {
+    if (e.key === "ArrowLeft") stepCamera(-1);
+    if (e.key === "ArrowRight") stepCamera(1);
+  }
+});
+
 $("loading").classList.add("hidden");
 draw();
 window.farmModel = {
