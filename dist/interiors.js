@@ -92,7 +92,95 @@ export function createInteriors(buildings, scene) {
     group.add(new THREE.LineSegments(geometry, fenceMaterial));
   }
 
-  pens("shed-a", [34, 34], 1.8);
+  // Shed A has two distinct longitudinal footpaths (North and South) flanked by cages
+  function pensDoubleFootpath(id) {
+    const shed = buildings[id];
+    const group = new THREE.Group();
+    shed.group.add(group);
+    interiorGroups.push(group);
+    const width = shed.w - 0.8;
+    const vertices = [];
+
+    // Two longitudinal footpaths running the length of Shed A at z = -4.25 and z = +4.25
+    const pathZ = 4.25;
+    const pathWidth = 1.6;
+    addFloor(group, width, pathWidth, 0, -pathZ, pathMaterial);
+    addFloor(group, width, pathWidth, 0, pathZ, pathMaterial);
+
+    // Cross-connecting walkways at west and east entrance ends
+    addFloor(group, 1.8, 10.4, -width / 2 + 0.9, 0, pathMaterial);
+    addFloor(group, 1.8, 10.4, width / 2 - 0.9, 0, pathMaterial);
+
+    // 4 rows of 17 pens = 68 pens total
+    // Row 1: North wall bank (z = -6.55)
+    // Row 2: Center-north bank (z = -1.85)
+    // Row 3: Center-south bank (z = +1.85)
+    // Row 4: South wall bank (z = +6.55)
+    const rows = [
+      { z: -6.55, depth: 2.85, side: -1 },
+      { z: -1.85, depth: 2.95, side: -1 },
+      { z: 1.85, depth: 2.95, side: 1 },
+      { z: 6.55, depth: 2.85, side: 1 },
+    ];
+    const countPerRow = 17;
+    counts[id] = countPerRow * rows.length; // 68 pens
+
+    const cellWidth = (width - 1.8) / countPerRow;
+    const startX = -width / 2 + 0.9;
+    const endX = width / 2 - 0.9;
+
+    for (const [rIdx, r] of rows.entries()) {
+      const z = r.z;
+      const depth = r.depth;
+      // Front and back rails
+      rail(vertices, startX, z - depth / 2, endX, z - depth / 2);
+      rail(vertices, startX, z + depth / 2, endX, z + depth / 2);
+
+      // Dividers
+      for (let i = 0; i <= countPerRow; i++) {
+        const x = startX + i * cellWidth;
+        rail(vertices, x, z - depth / 2, x, z + depth / 2);
+      }
+
+      // Pen floors and pigs
+      for (let i = 0; i < countPerRow; i++) {
+        const x = startX + (i + 0.5) * cellWidth;
+        addFloor(group, cellWidth - 0.08, depth - 0.08, x, z, floorMaterial);
+        const pen = {
+          id: `${id}-${rIdx + 1}-${i + 1}`,
+          shed: id,
+          x,
+          z,
+          width: cellWidth,
+          depth,
+        };
+        enclosures.push(pen);
+        animals.push({
+          species: "pig",
+          shed,
+          x,
+          z,
+          radiusX: Math.max(0.025, cellWidth / 2 - 0.5),
+          radiusZ: Math.min(0.6, depth / 2 - 0.7),
+          size: Math.min(1, cellWidth / 1.35),
+          phase: animals.length * 2.399,
+          facing: r.side === -1 ? 0 : Math.PI,
+        });
+      }
+    }
+
+    // Center divider rail along z = 0
+    rail(vertices, startX, 0, endX, 0);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(vertices, 3),
+    );
+    group.add(new THREE.LineSegments(geometry, fenceMaterial));
+  }
+
+  pensDoubleFootpath("shed-a");
   pens("shed-b", [10, 9], 1.6);
   pens("shed-c", [10, 10], 1.8);
 

@@ -118,7 +118,7 @@ The expandable **Layers** panel allows toggling specific scene elements on and o
 
 | Location | Camera Count | Hardware & Lens Spec | Identifiers & Coverage |
 | :--- | :---: | :--- | :--- |
-| **Shed A** | 4 | 2.8 mm Dome (103° Wide View) | A1–A4: 2 cameras at each end entrance (covers central aisle and pens). |
+| **Shed A** | 4 | 2.8 mm Dome (103° Wide View) | A1–A4: 2 cameras at each end in the two footpaths (tilted down over pens and walkways). |
 | **Shed B** | 2 | 2.8 mm Dome (103° Wide View) | B1–B2: Primary entrance and lengthwise corridor view. |
 | **Shed C** | 2 | C1: 2.8 mm Dome · C2: 4.0 mm Bullet | **C1** faces inward along pen row; **C2** monitors network room and gate path. |
 | **Shed D** | 1 | 2.8 mm Dome (103° Wide View) | D1: Open chicken enclosure coverage. |
@@ -166,7 +166,7 @@ Each camera connects to an assigned visible switch port, follows a roof lead to 
 
 Click **Inside** in the view bar to toggle roofs and inspect building interiors:
 
-- **Shed A**: 68 individual pens (34 pens on each side of a central aisle).
+- **Shed A**: 68 individual pens arranged in 4 rows flanking two longitudinal footpaths (North and South footpaths).
 - **Shed B**: 19 pens total (rows of 10 and 9 flanking a central walkway).
 - **Shed C**: 20 pens total (two parallel rows of 10).
 - **Shed D**: Large open-air free-range chicken enclosure.

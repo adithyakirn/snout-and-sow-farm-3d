@@ -208,20 +208,34 @@ function building(id, name, p, w, d, description, indicative = false) {
     }
   }
   box(0.18, wallHeight, d, w / 2 - 0.09, wallHeight / 2, 0, mats.wall, group);
-  // Leave an opening at the left end for the entrance.
-  const opening = Math.min(2.3, d * 0.4),
-    sideWidth = (d - opening) / 2;
-  for (const side of [-1, 1])
-    box(
-      0.18,
-      h,
-      sideWidth,
-      -w / 2 + 0.09,
-      h / 2,
-      side * (opening / 2 + sideWidth / 2),
-      mats.wall,
-      group,
-    );
+  // Leave openings at the left end for entrance footpaths.
+  if (id === "shed-a") {
+    // Shed A has two footpaths at z = -4.25 and z = +4.25
+    const pathDoor = 1.8;
+    const z1 = -4.25, z2 = 4.25;
+    const nW = Math.abs((z1 - pathDoor / 2) - (-d / 2));
+    const nZ = -d / 2 + nW / 2;
+    box(0.18, h, nW, -w / 2 + 0.09, h / 2, nZ, mats.wall, group);
+    const cW = Math.abs((z2 - pathDoor / 2) - (z1 + pathDoor / 2));
+    box(0.18, h, cW, -w / 2 + 0.09, h / 2, 0, mats.wall, group);
+    const sW = Math.abs(d / 2 - (z2 + pathDoor / 2));
+    const sZ = d / 2 - sW / 2;
+    box(0.18, h, sW, -w / 2 + 0.09, h / 2, sZ, mats.wall, group);
+  } else {
+    const opening = Math.min(2.3, d * 0.4),
+      sideWidth = (d - opening) / 2;
+    for (const side of [-1, 1])
+      box(
+        0.18,
+        h,
+        sideWidth,
+        -w / 2 + 0.09,
+        h / 2,
+        side * (opening / 2 + sideWidth / 2),
+        mats.wall,
+        group,
+      );
+  }
   box(0.2, 0.3, d, -w / 2 + 0.09, h - 0.15, 0, mats.trim, group);
   if (isShed) {
     for (let x = -w / 2 + 2; x < w / 2; x += 4)
@@ -336,7 +350,7 @@ const a = building(
   [550, 1360],
   32,
   17,
-  "4 cameras, two at each end. Proposed PoE switch 2 serves this shed, the gate and kitchen.",
+  "4 cameras, two at each end in the two footpaths. Proposed PoE switch 2 serves this shed, the gate and kitchen.",
 );
 const b = building(
   "shed-b",
@@ -692,59 +706,59 @@ function addCamera(id, point, dir, switchId, description) {
     point,
   );
 }
-// Shed A (32m x 17m): 4 dome cameras, 2 at each end looking down north & south pen banks
+// Shed A (32m x 17m): 4 dome cameras mounted directly in the two footpaths (North & South) tilted down to show cages under it
 addCamera(
   "A1",
-  a.point(-14.8, -4.25, 2.7),
-  a.point(8.0, -1.2, 0.75).sub(a.point(-14.8, -4.25, 2.7)),
+  a.point(-14.8, -4.25, 2.65),
+  a.point(-7.5, -4.25, 0.2).sub(a.point(-14.8, -4.25, 2.65)),
   2,
-  "Shed A west entrance, north aisle (103° wide view across north pens and walkway)",
+  "Shed A west entrance, North Footpath (103° wide view tilted down over pens and walkway)",
 );
 addCamera(
   "A2",
-  a.point(-14.8, 4.25, 2.7),
-  a.point(8.0, 1.2, 0.75).sub(a.point(-14.8, 4.25, 2.7)),
+  a.point(-14.8, 4.25, 2.65),
+  a.point(-7.5, 4.25, 0.2).sub(a.point(-14.8, 4.25, 2.65)),
   2,
-  "Shed A west entrance, south aisle (103° wide view across south pens and walkway)",
+  "Shed A west entrance, South Footpath (103° wide view tilted down over pens and walkway)",
 );
 addCamera(
   "A3",
-  a.point(14.8, -4.25, 2.7),
-  a.point(-8.0, -1.2, 0.75).sub(a.point(14.8, -4.25, 2.7)),
+  a.point(14.8, -4.25, 2.65),
+  a.point(7.5, -4.25, 0.2).sub(a.point(14.8, -4.25, 2.65)),
   2,
-  "Shed A east end, north aisle (103° wide view across north pens and walkway)",
+  "Shed A east end, North Footpath (103° wide view tilted down over pens and walkway)",
 );
 addCamera(
   "A4",
-  a.point(14.8, 4.25, 2.7),
-  a.point(-8.0, 1.2, 0.75).sub(a.point(14.8, 4.25, 2.7)),
+  a.point(14.8, 4.25, 2.65),
+  a.point(7.5, 4.25, 0.2).sub(a.point(14.8, 4.25, 2.65)),
   2,
-  "Shed A east end, south aisle (103° wide view across south pens and walkway)",
+  "Shed A east end, South Footpath (103° wide view tilted down over pens and walkway)",
 );
 
-// Shed B (28m x 8m): 2 dome cameras along central aisle covering all 19 pens
+// Shed B (28m x 8m): 2 dome cameras along central footpath tilted down over pens and walkway
 addCamera(
   "B1",
-  b.point(-12.8, 0, 2.65),
-  b.point(6.0, 0, 0.7).sub(b.point(-12.8, 0, 2.65)),
+  b.point(-12.8, 0, 2.6),
+  b.point(-5.5, 0, 0.2).sub(b.point(-12.8, 0, 2.6)),
   1,
-  "Shed B west entrance, central aisle (103° wide view across all 19 pig pens)",
+  "Shed B west entrance, central footpath (103° wide view tilted down over 19 pig pens)",
 );
 addCamera(
   "B2",
-  b.point(12.8, 0, 2.65),
-  b.point(-6.0, 0, 0.7).sub(b.point(12.8, 0, 2.65)),
+  b.point(12.8, 0, 2.6),
+  b.point(5.5, 0, 0.2).sub(b.point(12.8, 0, 2.6)),
   1,
-  "Shed B east end, central aisle (103° wide view across all 19 pig pens)",
+  "Shed B east end, central footpath (103° wide view tilted down over 19 pig pens)",
 );
 
-// Shed C (34m x 11m, 20 pig pens): C1 looks inside, C2 is 4mm bullet facing outside
+// Shed C (34m x 11m, 20 pig pens): C1 in central footpath tilted down over pens and walkway, C2 is 4mm bullet facing outside
 addCamera(
   "C1",
-  c.point(-15.6, 0, 2.7),
-  c.point(8.0, 0, 0.75).sub(c.point(-15.6, 0, 2.7)),
+  c.point(-15.6, 0, 2.65),
+  c.point(-7.5, 0, 0.2).sub(c.point(-15.6, 0, 2.65)),
   1,
-  "Shed C west entrance, central aisle (103° wide view across 20 pig pens)",
+  "Shed C west entrance, central footpath (103° wide view tilted down over 20 pig pens)",
 );
 const c2Pos = c.point(-17.2, 1.2, 2.8);
 const c2Target = network.group.position
@@ -760,13 +774,13 @@ addCamera(
   "Shed C entrance exterior, 4.0mm bullet facing southwest toward network room and gate",
 );
 
-// Shed D (22m x 5m, chicken enclosure): D1 looks inside across enclosure
+// Shed D (22m x 5m, chicken enclosure): D1 in enclosure passage tilted down to show chickens and straw
 addCamera(
   "D1",
   d.point(-9.8, 0, 2.45),
-  d.point(4.0, 0, 0.65).sub(d.point(-9.8, 0, 2.45)),
+  d.point(-2.5, 0, 0.2).sub(d.point(-9.8, 0, 2.45)),
   1,
-  "Shed D chicken enclosure (103° wide view across free-range chicken area)",
+  "Shed D chicken enclosure (103° wide view tilted down over chicken area)",
 );
 
 // Gate G1 (4.0mm bullet camera): Beside Shed A corner aimed at main gate
@@ -790,9 +804,9 @@ const kitchenGatePosition = kitchen.point(
 addCamera(
   "K1",
   kitchenInsidePosition,
-  kitchen.point(3.8, 1.8, 0.85).sub(kitchenInsidePosition),
+  kitchen.point(2.8, 1.2, 0.35).sub(kitchenInsidePosition),
   2,
-  "Inside kitchen workspace (103° wide view across preparation area and staff)",
+  "Inside kitchen workspace (103° wide view tilted down over preparation area and staff)",
 );
 addCamera(
   "K2",
@@ -937,7 +951,8 @@ for (const [i, { id, q }] of future.entries()) {
   routes[routes.length - 1].switchIds = [1];
 }
 for (const [id, description] of Object.entries({
-  "shed-a": "68 cages, interpreted as 34 per side with a central pathway.",
+  "shed-a":
+    "68 cages arranged in 4 rows flanking two longitudinal footpaths (North and South footpaths).",
   "shed-b":
     "19 cages total, arranged 10 on one side and 9 on the other, with a central pathway.",
   "shed-c": "20 cages total, arranged 10 on each side of a central pathway.",
