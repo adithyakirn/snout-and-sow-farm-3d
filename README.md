@@ -119,16 +119,16 @@ The expandable **Layers** panel allows toggling specific scene elements on and o
 | :--- | :---: | :--- | :--- |
 | **Shed A** | 4 | 2.8 mm Dome (103° Wide View) | A1–A4: 2 cameras at each end entrance (covers central aisle and pens). |
 | **Shed B** | 2 | 2.8 mm Dome (103° Wide View) | B1–B2: Primary entrance and lengthwise corridor view. |
-| **Shed C** | 1 | 2.8 mm Dome (103° Wide View) | C1: Open chicken enclosure coverage. |
-| **Shed D** | 2 | D1: 2.8 mm Dome · D2: 4.0 mm Bullet | **D1** faces inward along pen row; **D2** monitors network room and gate path. |
+| **Shed C** | 2 | C1: 2.8 mm Dome · C2: 4.0 mm Bullet | **C1** faces inward along pen row; **C2** monitors network room and gate path. |
+| **Shed D** | 1 | 2.8 mm Dome (103° Wide View) | D1: Open chicken enclosure coverage. |
 | **Main Gate** | 1 | 4.0 mm Bullet (79° Focused View) | **G1** mounted at the corner of Shed A, oriented directly toward the entry gate. |
 | **Kitchen & Storage** | 2 | K1: 2.8 mm Dome · K2: 4.0 mm Bullet | **K1** interior workspace overview; **K2** exterior corner facing the gate. |
 | **Upcoming Sheds A & B** | 0 | Spare Conduit Provision | Cable provisioning only (pre-drawn conduit and pull points). |
 
 ### Camera Models and Viewport Optics
 
-- **Dome Cameras (2.8 mm Focal Length)**: Deployed across Sheds A, B, C, D (D1), and Kitchen interior (K1). Feature circular ceiling/eave base collars, dark smoked dome bubbles, and an inner turret eye providing a wide ~103° horizontal field of view.
-- **Bullet Cameras (4.0 mm Focal Length)**: Deployed at Gate (G1), Shed D yard approach (D2), and Kitchen exterior (K2). Feature cylindrical housings, protective sunshields, front glass faceplates, and articulated mounting brackets providing a narrower ~79° horizontal field of view for outdoor perimeter distance.
+- **Dome Cameras (2.8 mm Focal Length)**: Deployed across Sheds A, B, C (C1), D (D1), and Kitchen interior (K1). Feature circular ceiling/eave base collars, dark smoked dome bubbles, and an inner turret eye providing a wide ~103° horizontal field of view.
+- **Bullet Cameras (4.0 mm Focal Length)**: Deployed at Gate (G1), Shed C yard approach (C2), and Kitchen exterior (K2). Feature cylindrical housings, protective sunshields, front glass faceplates, and articulated mounting brackets providing a narrower ~79° horizontal field of view for outdoor perimeter distance.
 
 ---
 
@@ -167,8 +167,8 @@ Click **Inside** in the view bar to toggle roofs and inspect building interiors:
 
 - **Shed A**: 68 individual pens (34 pens on each side of a central aisle).
 - **Shed B**: 19 pens total (rows of 10 and 9 flanking a central walkway).
-- **Shed D**: 20 pens total (two parallel rows of 10).
-- **Shed C**: Large open-air free-range chicken enclosure.
+- **Shed C**: 20 pens total (two parallel rows of 10).
+- **Shed D**: Large open-air free-range chicken enclosure.
 - **Kitchen & Medicine Storage**: Partitioned building with medical storage on the left, kitchen counters on the right, and walking personnel.
 - **Performance**: Livestock (illustrative pigs and 16 chickens) are rendered via instanced geometry and simple vertex keyframes to maintain smooth frame rates on mobile hardware.
 

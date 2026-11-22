@@ -190,7 +190,7 @@ function building(id, name, p, w, d, description, indicative = false) {
     roughness: 1,
   });
   box(w, 0.18, d, 0, 0.09, 0, slabMaterial, group);
-  const wallHeight = id === "shed-c" ? 0.2 : isShed ? 1.15 : h;
+  const wallHeight = id === "shed-d" ? 0.2 : isShed ? 1.15 : h;
   for (const side of [-1, 1]) {
     box(
       w,
@@ -347,20 +347,20 @@ const b = building(
 );
 const c = building(
   "shed-c",
-  "Shed C · chicken",
+  "Shed C",
+  [608, 635],
+  34,
+  11,
+  "Both cameras at the assumed left-end entrance. C1 looks inside. C2 points toward the network room and gate.",
+);
+const d = building(
+  "shed-d",
+  "Shed D · chicken",
   [531, 749],
   22,
   5,
   "1 camera at the assumed left end, connected to switch 1.",
   true,
-);
-const d = building(
-  "shed-d",
-  "Shed D",
-  [608, 635],
-  34,
-  11,
-  "Both cameras at the assumed left-end entrance. D1 looks inside. D2 points toward the network room and gate.",
 );
 const kitchen = building(
   "kitchen",
@@ -380,8 +380,8 @@ const network = building(
   "NVR and 2 TB hard drive in the room, with PoE switch 1 shown on its roof. Kept at its original left-side location and moved only 3 m farther from the cage area. Five current cameras connect here. A fibre link connects switch 2 on Shed A’s roof.",
   true,
 );
-// Door is drawn on the short entrance face of Shed D.
-box(0.12, 2.3, 2.2, -17.07, 1.15, 0, mats.dark, d.group);
+// Door is drawn on the short entrance face of Shed C.
+box(0.12, 2.3, 2.2, -17.07, 1.15, 0, mats.dark, c.group);
 const gate = pos(294, 1565);
 for (const dx of [-2.5, 2.5])
   box(0.4, 2, 0.4, gate.x + dx, 1, gate.z, mats.wall);
@@ -493,7 +493,7 @@ const roofSwitches = {
     "switch-1",
     network,
     1,
-    "Network room roof. Serves B1, B2, C1, D1, D2 and future shed provisions.",
+    "Network room roof. Serves B1, B2, C1, C2, D1 and future shed provisions.",
   ),
   2: createRoofSwitch(
     "switch-2",
@@ -516,7 +516,7 @@ function switchLead(switchNumber, portIndex, fibre = false) {
 const camGroup = new THREE.Group();
 scene.add(camGroup);
 function addCamera(id, point, dir, switchId, description) {
-  const isBullet = id === "G1" || id === "D2" || id === "K2";
+  const isBullet = id === "G1" || id === "C2" || id === "D2" || id === "K2";
   const lens = isBullet ? "4.0mm" : "2.8mm";
   const hfov = isBullet ? 79 : 103;
   const type = isBullet ? "bullet" : "dome";
@@ -701,29 +701,29 @@ addCamera("B1", b.point(-14.3, 0), east, 1, "Shed B, left end");
 addCamera("B2", b.point(14.3, 0), west, 1, "Shed B, right end");
 addCamera(
   "C1",
-  c.point(-11.3, 0),
+  c.point(-16.8, -0.8),
   east,
   1,
-  "Chicken shed, assumed left-end position",
+  "Shed C entrance, facing inside",
 );
 addCamera(
-  "D1",
-  d.point(-16.8, -0.8),
-  east,
-  1,
-  "Shed D entrance, facing inside",
-);
-addCamera(
-  "D2",
-  d.point(-17.4, 1),
+  "C2",
+  c.point(-17.4, 1),
   network.group.position
     .clone()
     .add(gate)
     .multiplyScalar(0.5)
     .setY(1.2)
-    .sub(d.point(-17.4, 1)),
+    .sub(c.point(-17.4, 1)),
   1,
-  "Shed D entrance, facing toward the network room and gate",
+  "Shed C entrance, facing toward the network room and gate",
+);
+addCamera(
+  "D1",
+  d.point(-11.3, 0),
+  east,
+  1,
+  "Shed D · chicken enclosure, assumed left-end position",
 );
 const gateCameraPosition = a.point(-a.w / 2 - 0.4, a.d / 2 + 0.35, 2.9);
 const kitchenInsidePosition = kitchen.point(0.45, -2.45, 2.6);
@@ -893,8 +893,8 @@ for (const [id, description] of Object.entries({
   "shed-a": "68 cages, interpreted as 34 per side with a central pathway.",
   "shed-b":
     "19 cages total, arranged 10 on one side and 9 on the other, with a central pathway.",
-  "shed-d": "20 cages total, arranged 10 on each side of a central pathway.",
-  "shed-c": "Open chicken enclosure with illustrative animated chickens.",
+  "shed-c": "20 cages total, arranged 10 on each side of a central pathway.",
+  "shed-d": "Open chicken enclosure with illustrative animated chickens.",
 }))
   entries.get(id).description += " " + description;
 // Similarity registration from three visible roofs in the supplied map.

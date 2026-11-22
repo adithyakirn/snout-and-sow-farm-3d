@@ -94,9 +94,9 @@ export function createInteriors(buildings, scene) {
 
   pens("shed-a", [34, 34], 1.8);
   pens("shed-b", [10, 9], 1.6);
-  pens("shed-d", [10, 10], 1.8);
+  pens("shed-c", [10, 10], 1.8);
 
-  const chickenShed = buildings["shed-c"];
+  const chickenShed = buildings["shed-d"];
   const chickenGroup = new THREE.Group();
   chickenShed.group.add(chickenGroup);
   interiorGroups.push(chickenGroup);
@@ -138,7 +138,7 @@ export function createInteriors(buildings, scene) {
       facing: i * 0.7,
     });
   }
-  counts["shed-c"] = 1;
+  counts["shed-d"] = 1;
 
   const sphere = new THREE.SphereGeometry(1, 10, 7);
   const cube = new THREE.BoxGeometry(1, 1, 1);
