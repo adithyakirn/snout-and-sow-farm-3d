@@ -1175,11 +1175,12 @@ body.camera-mode #instructions {
     margin-top: 0;
   }
   .cctv-reticle-overlay {
-    inset: 125px 14px 140px 14px;
+    inset: calc(150px + env(safe-area-inset-top)) 16px calc(145px + env(safe-area-inset-bottom)) 16px;
+    pointer-events: none;
   }
   .cctv-corner {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
   /* Mobile Bottom Dock: 2 Rows */

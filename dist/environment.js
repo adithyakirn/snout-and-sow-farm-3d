@@ -73,8 +73,7 @@ export function createGhibliSky() {
 /**
  * Custom Ghibli Cel-Shader Material
  * Directly computes stepped cel lighting from surface normals and light vector
- * using a 4-tier discrete color palette (Highlight -> Midtone -> Mid-Shadow -> Deep Shadow),
- * for the existing compound props. Foliage lives in forest.js.
+ * using a 4-tier discrete color palette (Highlight -> Midtone -> Mid-Shadow -> Deep Shadow).
  */
 export function createGhibliMaterial({
   colors,
@@ -155,7 +154,6 @@ export function createGhibliMaterial({
         }
 
         #ifdef USE_INSTANCING_COLOR
-          // Subtle natural variation per tree instance
           col = mix(col, col * vInstanceColor * 1.35, 0.28);
         #endif
 
@@ -172,9 +170,294 @@ export function createGhibliMaterial({
 }
 
 /**
+ * Custom Ghibli Ground Shader Material (Craftzdog & Kazuo Oga Aesthetic)
+ * Modulates diffuse sunlight with multi-frequency procedural watercolor wash noise,
+ * imparting warm golden sunlight tint, cool ambient sky fill, and fine paper tooth.
+ */
+export function createGhibliGroundMaterial({
+  map,
+  sunDirection = new THREE.Vector3(-40, 85, 35).normalize(),
+}) {
+  const uniforms = THREE.UniformsUtils.merge([
+    THREE.UniformsLib.fog,
+    {
+      map: { value: map },
+      sunDirection: { value: sunDirection },
+      time: { value: 0 },
+    },
+  ]);
+
+  return new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: /* glsl */ `
+      #include <fog_pars_vertex>
+
+      varying vec2 vUv;
+      varying vec3 vWorldPosition;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vUv = uv;
+        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPos.xyz;
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        vec4 mvPosition = viewMatrix * worldPos;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+
+      #include <fog_pars_fragment>
+
+      uniform sampler2D map;
+      uniform vec3 sunDirection;
+      uniform float time;
+
+      varying vec2 vUv;
+      varying vec3 vWorldPosition;
+      varying vec3 vWorldNormal;
+
+      // Fast procedural noise for Craftzdog watercolor wash
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+
+      void main() {
+        vec4 texColor = texture2D(map, vUv);
+
+        // Multi-frequency watercolor wash (Craftzdog style)
+        vec2 p = vWorldPosition.xz;
+        float n1 = noise(p * 0.035);
+        float n2 = noise(p * 0.105 + 2.1);
+        float n3 = noise(p * 0.28 + 5.7);
+        float wash = n1 * 0.54 + n2 * 0.32 + n3 * 0.14;
+
+        // Modulate diffuse lighting with watercolor wash
+        float sunDot = max(0.0, dot(vWorldNormal, sunDirection));
+        float lightVal = sunDot + (wash - 0.5) * 0.44;
+
+        vec3 col = texColor.rgb;
+
+        // Ghibli warm sunlight & cool sky ambient color grading
+        vec3 sunTint = vec3(1.08, 1.04, 0.94);
+        vec3 shadowTint = vec3(0.88, 0.94, 1.02);
+
+        // Stepped 3-tier Ghibli cel light transition
+        if (lightVal > 0.85) {
+          col = col * sunTint * 1.06;
+        } else if (lightVal > 0.64) {
+          float t = (lightVal - 0.64) / 0.21;
+          col = col * mix(shadowTint, sunTint, t);
+        } else {
+          col = col * shadowTint * 0.94;
+        }
+
+        // Micro-grain for watercolor paper tooth
+        float grain = (hash(gl_FragCoord.xy) - 0.5) * 0.026;
+        col += vec3(grain);
+
+        gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }
+    `,
+    fog: true,
+  });
+}
+
+/**
+ * 4-blade tapered stylized anime grass tuft geometry with vertex color gradient
+ * (deep moss viridian root -> lush anime green mid -> sunlit golden chartreuse tip).
+ */
+function createGhibliGrassGeometry() {
+  const geo = new THREE.BufferGeometry();
+  const positions = [];
+  const colors = [];
+  const indices = [];
+
+  const rootCol = [0.13, 0.28, 0.12]; // deep viridian moss #21471f
+  const midCol = [0.28, 0.58, 0.20];  // lush anime green #479433
+  const tipCol = [0.61, 0.86, 0.28];  // golden sunlit chartreuse #9cdc47
+
+  const bladeAngles = [0.1, 1.62, 3.2, 4.8];
+  const bladeHeights = [0.52, 0.45, 0.48, 0.42];
+  const bladeCurves = [0.12, 0.10, 0.11, 0.09];
+
+  let vOffset = 0;
+  for (let b = 0; b < 4; b++) {
+    const ang = bladeAngles[b];
+    const h = bladeHeights[b];
+    const curve = bladeCurves[b];
+    const cosA = Math.cos(ang);
+    const sinA = Math.sin(ang);
+    const perpX = -sinA;
+    const perpZ = cosA;
+
+    const baseW = 0.045;
+    const midW = 0.035;
+
+    // V0, V1 (base)
+    positions.push(-perpX * baseW, 0, -perpZ * baseW);
+    colors.push(...rootCol);
+    positions.push(perpX * baseW, 0, perpZ * baseW);
+    colors.push(...rootCol);
+
+    // V2, V3 (mid)
+    const midX = cosA * curve * 0.45;
+    const midZ = sinA * curve * 0.45;
+    positions.push(midX - perpX * midW, h * 0.48, midZ - perpZ * midW);
+    colors.push(...midCol);
+    positions.push(midX + perpX * midW, h * 0.48, midZ + perpZ * midW);
+    colors.push(...midCol);
+
+    // V4 (tip)
+    const tipX = cosA * curve;
+    const tipZ = sinA * curve;
+    positions.push(tipX, h, tipZ);
+    colors.push(...tipCol);
+
+    // Triangles for this blade:
+    indices.push(vOffset + 0, vOffset + 1, vOffset + 3);
+    indices.push(vOffset + 0, vOffset + 3, vOffset + 2);
+    indices.push(vOffset + 2, vOffset + 3, vOffset + 4);
+
+    vOffset += 5;
+  }
+
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Grass Tuft ShaderMaterial with anime wind sway in vertex shader
+ */
+function createGhibliGrassMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        time: { value: 0 },
+        sunDirection: { value: new THREE.Vector3(-40, 85, 35).normalize() },
+      },
+    ]),
+    vertexShader: /* glsl */ `
+      #include <fog_pars_vertex>
+      uniform float time;
+      varying vec3 vColor;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vColor = color;
+        vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+
+        // Anime gentle wind sway (sways upper tips, roots anchored)
+        float anchor = pow(clamp(position.y / 0.5, 0.0, 1.0), 1.5);
+        float sway = sin(time * 2.2 + worldPos.x * 0.55 + worldPos.z * 0.38) * 0.08 * anchor;
+
+        vec3 p = position;
+        p.x += sway;
+        p.z += sway * 0.4;
+
+        worldPos = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        vWorldNormal = normalize(mat3(modelMatrix * instanceMatrix) * normal);
+        vec4 mvPosition = viewMatrix * worldPos;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      #include <fog_pars_fragment>
+      uniform vec3 sunDirection;
+      varying vec3 vColor;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        float sunDot = max(0.0, dot(vWorldNormal, sunDirection));
+        vec3 col = vColor;
+        if (sunDot > 0.28) {
+          col *= 1.1;
+        } else {
+          col *= 0.88;
+        }
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }
+    `,
+    side: THREE.DoubleSide,
+    fog: true,
+  });
+}
+
+/**
+ * Low-poly stylized Ghibli wildflower (daisy/buttercup) geometry with vertex colors
+ */
+function createGhibliWildflowerGeometry() {
+  const geo = new THREE.BufferGeometry();
+  const positions = [];
+  const colors = [];
+  const indices = [];
+
+  const stemCol = [0.25, 0.55, 0.22];
+  const yellowCol = [1.0, 0.86, 0.28];
+  const whiteCol = [0.98, 0.98, 0.96];
+  const centerCol = [0.95, 0.65, 0.12];
+
+  const h = 0.32;
+  positions.push(-0.012, 0, 0, 0.012, 0, 0, 0.01, h, 0, -0.01, h, 0);
+  colors.push(...stemCol, ...stemCol, ...stemCol, ...stemCol);
+  indices.push(0, 1, 2, 0, 2, 3);
+
+  const petalCount = 5;
+  const radius = 0.045;
+  const cIdx = 4;
+  positions.push(0, h + 0.01, 0);
+  colors.push(...centerCol);
+
+  for (let i = 0; i < petalCount; i++) {
+    const a1 = (i / petalCount) * Math.PI * 2;
+    const a2 = ((i + 0.5) / petalCount) * Math.PI * 2;
+    const pIdx = 5 + i * 2;
+    positions.push(Math.cos(a1) * radius, h + 0.01, Math.sin(a1) * radius);
+    colors.push(...yellowCol);
+    positions.push(Math.cos(a2) * (radius * 0.5), h + 0.01, Math.sin(a2) * (radius * 0.5));
+    colors.push(...whiteCol);
+
+    indices.push(cIdx, pIdx, (pIdx + 1));
+    indices.push(cIdx, (pIdx + 1), (5 + ((i + 1) % petalCount) * 2));
+  }
+
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
  * Studio Ghibli / Kazuo Oga Aesthetic 3D Environment
  * Replaces flat 2D satellite aerial imagery with painterly 3D terrain,
- * terraced water paddies, and multi-lobed cloud-foliage trees.
+ * terraced water paddies, warm earth courtyard, and multi-lobed cloud-foliage trees.
  */
 export function createEnvironment(scene) {
   const envGroup = new THREE.Group();
@@ -186,7 +469,7 @@ export function createEnvironment(scene) {
   let forest;
 
   // ==========================================================================
-  // 1. Ghibli Landscape Ground (Terraced Water Paddies & Warm Dirt Paths)
+  // 1. Ghibli Landscape Ground (Kazuo Oga Watercolor Washes & Terraced Paddies)
   // ==========================================================================
   const canvas = document.createElement("canvas");
   canvas.width = 2048;
@@ -199,27 +482,70 @@ export function createEnvironment(scene) {
     ((wz + 280) / worldSize) * 2048,
   ];
 
-  // Base lush painterly meadow grass
-  ctx.fillStyle = "#5ea538";
+  // 1A. Deep lush viridian undercoat (Kazuo Oga base wash)
+  ctx.fillStyle = "#2c5427";
   ctx.fillRect(0, 0, 2048, 2048);
 
-  // Surrounding Terraced Fields (like Kazuo Oga's flooded rice paddies)
+  // 1B. Multi-tier organic gouache washes (broad overlapping radial gradients)
+  const grassWashes = [
+    { x: 300, y: 400, r: 500, col: "#3f7734" },
+    { x: 1200, y: 350, r: 650, col: "#4a8a3a" },
+    { x: 1700, y: 900, r: 600, col: "#386e2f" },
+    { x: 700, y: 1100, r: 550, col: "#4e933e" },
+    { x: 1400, y: 1500, r: 650, col: "#448135" },
+    { x: 400, y: 1700, r: 600, col: "#3d7532" },
+    { x: 1024, y: 1024, r: 450, col: "#569d42" },
+  ];
+  for (const w of grassWashes) {
+    const g = ctx.createRadialGradient(w.x, w.y, 40, w.x, w.y, w.r);
+    g.addColorStop(0, w.col);
+    g.addColorStop(1, "rgba(44, 84, 39, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 2048, 2048);
+  }
+
+  // 1C. Warm sunny meadow dapples (sunlit chartreuse sweeps in open clearings)
+  const sunSweeps = [
+    { x: 950, y: 750, r: 350, col: "rgba(128, 198, 68, 0.45)" },
+    { x: 1350, y: 1100, r: 300, col: "rgba(142, 212, 74, 0.4)" },
+    { x: 650, y: 1400, r: 320, col: "rgba(120, 190, 62, 0.42)" },
+    { x: 1150, y: 1700, r: 400, col: "rgba(135, 205, 70, 0.38)" },
+    { x: 800, y: 550, r: 280, col: "rgba(148, 218, 78, 0.4)" },
+  ];
+  for (const s of sunSweeps) {
+    const g = ctx.createRadialGradient(s.x, s.y, 20, s.x, s.y, s.r);
+    g.addColorStop(0, s.col);
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 2048, 2048);
+  }
+
+  // 1D. Directional gouache dry-brush strokes (rippling meadow texture)
+  ctx.save();
+  ctx.rotate(-0.38);
+  for (let y = -500; y < 2500; y += 16) {
+    for (let x = -500; x < 2500; x += 26) {
+      const n = (Math.sin(x * 0.035 + y * 0.045) + Math.cos(x * 0.07 - y * 0.02)) * 0.5;
+      if (n > 0.15) {
+        ctx.fillStyle = n > 0.5 ? "rgba(152, 218, 82, 0.22)" : "rgba(52, 98, 42, 0.2)";
+        ctx.fillRect(x + n * 4, y, 16 + n * 12, 2.8);
+      }
+    }
+  }
+  ctx.restore();
+
+  // 1E. Surrounding Terraced Fields (flooded rice paddies like Kazuo Oga's master background art)
   const paddies = [
-    // Top-left terraces (water reflection + grass bunds)
     { x1: -280, z1: -280, x2: -60, z2: -160, water: true },
     { x1: -280, z1: -160, x2: -75, z2: -70, water: true },
-    // Top-right fields
     { x1: -60, z1: -280, x2: 130, z2: -170, water: false, color: "#4f8d32" },
     { x1: 130, z1: -280, x2: 280, z2: -150, water: true },
     { x1: 65, z1: -170, x2: 280, z2: -50, water: true },
-    // Right terraces
     { x1: 55, z1: -50, x2: 280, z2: 65, water: true },
     { x1: 65, z1: 65, x2: 280, z2: 180, water: false, color: "#59933a" },
     { x1: 65, z1: 180, x2: 280, z2: 280, water: true },
-    // Bottom terraces
     { x1: -90, z1: 85, x2: 65, z2: 200, water: true },
     { x1: -100, z1: 200, x2: 65, z2: 280, water: false, color: "#65a342" },
-    // Left terraces
     { x1: -280, z1: 75, x2: -90, z2: 280, water: true },
     { x1: -280, z1: -70, x2: -50, z2: 75, water: true },
   ];
@@ -231,34 +557,37 @@ export function createEnvironment(scene) {
     const ph = c2z - c1z;
 
     if (p.water) {
-      // Flooded paddy water reflecting Ghibli blue sky & soft clouds
-      ctx.fillStyle = "#88b7ab";
+      // Flooded paddy water reflecting Ghibli sky & soft clouds
+      ctx.fillStyle = "#80b2a5";
       ctx.fillRect(c1x, c1z, pw, ph);
 
       // Water sheen gradient
       const grad = ctx.createLinearGradient(c1x, c1z, c1x + pw, c1z + ph);
-      grad.addColorStop(0, "rgba(182, 226, 218, 0.55)");
-      grad.addColorStop(0.5, "rgba(142, 192, 182, 0.25)");
-      grad.addColorStop(1, "rgba(118, 168, 158, 0.45)");
+      grad.addColorStop(0, "rgba(182, 226, 218, 0.58)");
+      grad.addColorStop(0.5, "rgba(142, 192, 182, 0.28)");
+      grad.addColorStop(1, "rgba(118, 168, 158, 0.48)");
       ctx.fillStyle = grad;
       ctx.fillRect(c1x, c1z, pw, ph);
 
       // Tiny green rice seedling tufts in neat agricultural rows
-      ctx.fillStyle = "#3f6a2b";
+      ctx.fillStyle = "#335e24";
       const rowStep = 24;
       for (let rx = c1x + 12; rx < c1x + pw - 12; rx += rowStep) {
         for (let rz = c1z + 12; rz < c1z + ph - 12; rz += rowStep) {
           ctx.fillRect(rx, rz, 3, 4);
+          ctx.fillStyle = "rgba(40, 75, 65, 0.35)";
+          ctx.fillRect(rx - 1, rz + 4, 5, 2);
+          ctx.fillStyle = "#335e24";
         }
       }
 
       // Earthen dyke / grassy bund border
-      ctx.strokeStyle = "#3e602e";
+      ctx.strokeStyle = "#385b28";
       ctx.lineWidth = 6;
       ctx.strokeRect(c1x + 3, c1z + 3, pw - 6, ph - 6);
 
       // Sub-paddy partitions
-      ctx.strokeStyle = "#496f37";
+      ctx.strokeStyle = "#436932";
       ctx.lineWidth = 4;
       if (pw > 150) {
         ctx.beginPath();
@@ -275,16 +604,13 @@ export function createEnvironment(scene) {
     } else {
       ctx.fillStyle = p.color;
       ctx.fillRect(c1x, c1z, pw, ph);
-      // Grass bunds
-      ctx.strokeStyle = "#385b2b";
+      ctx.strokeStyle = "#345525";
       ctx.lineWidth = 5;
       ctx.strokeRect(c1x + 2, c1z + 2, pw - 4, ph - 4);
     }
   }
 
-  // Farm Compound Yard (Warm Painterly Earth / Sandy Ochre with Ghibli texture)
-  ctx.fillStyle = "#d8be94";
-  ctx.beginPath();
+  // 1F. Farm Compound Yard (Authentic Studio Ghibli Farm Mud / Terracotta Earth)
   const compoundPts = [
     [-30.5, 52.0],
     [35.5, 52.0],
@@ -295,31 +621,73 @@ export function createEnvironment(scene) {
     [-31.0, 30.0],
     [-30.5, 52.0],
   ];
-  const [fX, fZ] = toCanvas(compoundPts[0][0], compoundPts[0][1]);
-  ctx.moveTo(fX, fZ);
-  for (let i = 1; i < compoundPts.length; i++) {
-    const [cx, cz] = toCanvas(compoundPts[i][0], compoundPts[i][1]);
-    ctx.lineTo(cx, cz);
+
+  // Helper: Draw organic wavy polygon edge with natural scalloping
+  function drawOrganicMudPolygon(pts) {
+    ctx.beginPath();
+    const first = toCanvas(pts[0][0], pts[0][1]);
+    ctx.moveTo(first[0], first[1]);
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const [c1x, c1z] = toCanvas(p1[0], p1[1]);
+      const [c2x, c2z] = toCanvas(p2[0], p2[1]);
+      const subSteps = 8;
+      for (let s = 1; s <= subSteps; s++) {
+        const t = s / subSteps;
+        const bx = c1x + (c2x - c1x) * t;
+        const bz = c1z + (c2z - c1z) * t;
+        const wave = Math.sin(t * Math.PI * 4 + i * 1.7) * 4.5;
+        const normalX = -(c2z - c1z);
+        const normalZ = (c2x - c1x);
+        const len = Math.hypot(normalX, normalZ) || 1;
+        ctx.lineTo(bx + (normalX / len) * wave, bz + (normalZ / len) * wave);
+      }
+    }
+    ctx.closePath();
   }
-  ctx.closePath();
+
+  // 1. Deep moist shadow earth base
+  ctx.fillStyle = "#654429";
+  drawOrganicMudPolygon(compoundPts);
   ctx.fill();
 
-  // Subtle warm dirt gradient variations (sunlit center, richer moist earth toward perimeter)
+  // 2. Warm terracotta loam body wash
   const yardGrad = ctx.createRadialGradient(
-    ...toCanvas(3, 4),
-    15,
-    ...toCanvas(3, 4),
-    320,
+    ...toCanvas(4, 5),
+    20,
+    ...toCanvas(4, 5),
+    340,
   );
-  yardGrad.addColorStop(0, "rgba(244, 228, 198, 0.55)");
-  yardGrad.addColorStop(0.55, "rgba(222, 196, 156, 0.3)");
-  yardGrad.addColorStop(1, "rgba(172, 140, 102, 0.55)");
+  yardGrad.addColorStop(0, "rgba(224, 192, 146, 0.95)");  // Sunlit golden loam center
+  yardGrad.addColorStop(0.45, "rgba(182, 138, 92, 0.92)"); // Warm terracotta midtone
+  yardGrad.addColorStop(0.85, "rgba(142, 102, 64, 0.88)"); // Rich earthen perimeter
+  yardGrad.addColorStop(1, "rgba(95, 62, 38, 0.85)");      // Moist shadowed boundary
   ctx.fillStyle = yardGrad;
+  drawOrganicMudPolygon(compoundPts);
   ctx.fill();
 
-  // Main access road leading from outside (-50, 120) through the labeled Gate (-23.9, 48.07) into courtyard
-  ctx.strokeStyle = "#cca97b";
-  ctx.lineWidth = (7.5 / worldSize) * 2048;
+  // 3. Fine organic soil stippling (gouache earth tooth / sand grain)
+  let soilSeed = 512;
+  const sRnd = () => {
+    soilSeed = (soilSeed * 1664525 + 1013904223) % 4294967296;
+    return soilSeed / 4294967296;
+  };
+
+  const [minCX, minCZ] = toCanvas(-32, -54);
+  const [maxCX, maxCZ] = toCanvas(36, 53);
+  const soilTones = ["#52341d", "#7c522f", "#a37648", "#cfab76", "#e4caa0"];
+  for (let d = 0; d < 7500; d++) {
+    const sx = minCX + sRnd() * (maxCX - minCX);
+    const sz = minCZ + sRnd() * (maxCZ - minCZ);
+    ctx.fillStyle = soilTones[Math.floor(sRnd() * soilTones.length)];
+    ctx.fillRect(sx, sz, 1.8 + sRnd() * 2.2, 1.8 + sRnd() * 2.2);
+  }
+
+  // 1G. Access Road from outside (-50, 120) through Labeled Gate (-23.9, 48.07) into courtyard
+  ctx.strokeStyle = "#b58c5c";
+  ctx.lineWidth = (8.5 / worldSize) * 2048;
   ctx.lineCap = "round";
   ctx.beginPath();
   const [gGateX, gGateZ] = toCanvas(-23.895, 48.07);
@@ -328,9 +696,9 @@ export function createEnvironment(scene) {
   ctx.lineTo(gOutX, gOutZ);
   ctx.stroke();
 
-  // Gentle wheel tracks along the access road
-  ctx.strokeStyle = "rgba(168, 134, 94, 0.4)";
-  ctx.lineWidth = (1.1 / worldSize) * 2048;
+  // Worn cart wheel tracks leading through gate into compound
+  ctx.strokeStyle = "rgba(92, 58, 34, 0.55)";
+  ctx.lineWidth = (1.2 / worldSize) * 2048;
   for (const trackOffset of [-1.8, 1.8]) {
     ctx.beginPath();
     const [tInX, tInZ] = toCanvas(-23.895 + trackOffset * 0.8, 48.07 + trackOffset * 0.6);
@@ -340,11 +708,10 @@ export function createEnvironment(scene) {
     ctx.stroke();
   }
 
-  // Courtyard service pathways connecting Sheds, Kitchen, Network room and the labeled Gate
-  ctx.strokeStyle = "#cbb085";
-  ctx.lineWidth = (5.0 / worldSize) * 2048;
+  // 1H. Courtyard Service Pathways connecting Sheds, Kitchen, Network room and Gate
+  ctx.strokeStyle = "rgba(196, 158, 112, 0.75)";
+  ctx.lineWidth = (5.5 / worldSize) * 2048;
   ctx.beginPath();
-  // Driveway from labeled Gate curving into courtyard and east towards Shed A and Kitchen
   const [pGateX, pGateZ] = toCanvas(-23.895, 48.07);
   const [pShedAFootX, pShedAFootZ] = toCanvas(-17.5, 34.0);
   const [pSouthYardX, pSouthYardZ] = toCanvas(0.0, 44.0);
@@ -353,7 +720,7 @@ export function createEnvironment(scene) {
   ctx.lineTo(pShedAFootX, pShedAFootZ);
   ctx.lineTo(pSouthYardX, pSouthYardZ);
   ctx.lineTo(pKitchX, pKitchZ);
-  // Northward lane along west side of sheds to Network room and Shed C
+
   const [pNetX, pNetZ] = toCanvas(-18.5, -11.4);
   const [pShedCX, pShedCZ] = toCanvas(-13.0, -38.7);
   ctx.moveTo(pShedAFootX, pShedAFootZ);
@@ -361,7 +728,16 @@ export function createEnvironment(scene) {
   ctx.lineTo(pShedCX, pShedCZ);
   ctx.stroke();
 
-  // Helper: Draw concrete foundation apron precisely rotated to match 3D buildings
+  // Gentle curved cart wheel depressions through courtyard
+  ctx.strokeStyle = "rgba(82, 52, 28, 0.35)";
+  ctx.lineWidth = (1.1 / worldSize) * 2048;
+  ctx.beginPath();
+  ctx.moveTo(pGateX + 4, pGateZ);
+  ctx.quadraticCurveTo(pShedAFootX + 8, pShedAFootZ, pSouthYardX + 6, pSouthYardZ);
+  ctx.lineTo(pKitchX, pKitchZ + 4);
+  ctx.stroke();
+
+  // 1I. Helper: Draw concrete foundation apron precisely rotated to match 3D buildings
   function drawRotatedApron(x, z, w, d, rot = -0.13, options = {}) {
     const [cx, cz] = toCanvas(x, z);
     const wPx = (w / worldSize) * 2048;
@@ -369,19 +745,19 @@ export function createEnvironment(scene) {
 
     ctx.save();
     ctx.translate(cx, cz);
-    ctx.rotate(-rot); // In 2D canvas, Y is down so rotation -(-0.13) = +0.13 rad matches Three.js Y-rotation
+    ctx.rotate(-rot);
 
     // 1. Mossy earthen edge border (soft green/brown fringe)
-    ctx.fillStyle = options.edgeColor || "#507542";
+    ctx.fillStyle = options.edgeColor || "#456a38";
     const border = 5;
     ctx.fillRect(-wPx / 2 - border, -dPx / 2 - border, wPx + border * 2, dPx + border * 2);
 
     // 2. Concrete slab apron
-    ctx.fillStyle = options.slabColor || "#9ba29f";
+    ctx.fillStyle = options.slabColor || "#8e958f";
     ctx.fillRect(-wPx / 2, -dPx / 2, wPx, dPx);
 
     // 3. Subtle slab edge expansion line
-    ctx.strokeStyle = options.jointColor || "#7c8480";
+    ctx.strokeStyle = options.jointColor || "#6f7771";
     ctx.lineWidth = 2;
     ctx.strokeRect(-wPx / 2, -dPx / 2, wPx, dPx);
 
@@ -397,37 +773,26 @@ export function createEnvironment(scene) {
   }
 
   // Exact 3D Building Foundations (position, size, and -0.13 rad rotation)
-  // Shed A: [0.0, 28.935], size 32x17 -> apron 34x19
-  drawRotatedApron(0.0, 28.935, 34.0, 19.0, -0.13);
-
-  // Shed B: [1.213, 4.667], size 28x8 -> apron 30x10
-  drawRotatedApron(1.213, 4.667, 30.0, 10.0, -0.13);
-
-  // Shed C: [5.414, -38.736], size 34x11 -> apron 36x13
-  drawRotatedApron(5.414, -38.736, 36.0, 13.0, -0.13);
-
-  // Shed D (chicken): [-1.773, -28.095], size 22x5 -> apron 24x7
-  drawRotatedApron(-1.773, -28.095, 24.0, 7.0, -0.13);
-
-  // Network / CCTV: [-22.508, -11.388], size 6x6 -> apron 8x8
-  drawRotatedApron(-22.508, -11.388, 8.0, 8.0, -0.13);
-
-  // Kitchen: [27.909, 42.843], size 9x6 -> apron 11.5x8.5
-  drawRotatedApron(27.909, 42.843, 11.5, 8.5, -0.13);
+  drawRotatedApron(0.0, 28.935, 34.0, 19.0, -0.13);       // Shed A
+  drawRotatedApron(1.213, 4.667, 30.0, 10.0, -0.13);      // Shed B
+  drawRotatedApron(5.414, -38.736, 36.0, 13.0, -0.13);    // Shed C
+  drawRotatedApron(-1.773, -28.095, 24.0, 7.0, -0.13);    // Shed D (chicken)
+  drawRotatedApron(-22.508, -11.388, 8.0, 8.0, -0.13);    // Network / CCTV
+  drawRotatedApron(27.909, 42.843, 11.5, 8.5, -0.13);     // Kitchen
 
   // US A & US B (Upcoming sheds): compacted gravel hardstand foundation pads
   drawRotatedApron(-1.68, -8.307, 26.5, 7.5, -0.13, {
-    slabColor: "#b2ab9a",
-    edgeColor: "#6c6659",
-    jointColor: "#8e8677",
+    slabColor: "#a39b8c",
+    edgeColor: "#615949",
+    jointColor: "#7e7667",
   });
   drawRotatedApron(-1.68, -17.548, 26.5, 7.5, -0.13, {
-    slabColor: "#b2ab9a",
-    edgeColor: "#6c6659",
-    jointColor: "#8e8677",
+    slabColor: "#a39b8c",
+    edgeColor: "#615949",
+    jointColor: "#7e7667",
   });
 
-  // Inner lawn islands (fresh vibrant grass aligned with -0.13 rad shed angle)
+  // 1J. Inner lawn islands (fresh vibrant grass aligned with -0.13 rad shed angle)
   function drawRotatedLawn(x, z, w, d, rot = -0.13) {
     const [cx, cz] = toCanvas(x, z);
     const wPx = (w / worldSize) * 2048;
@@ -435,19 +800,45 @@ export function createEnvironment(scene) {
     ctx.save();
     ctx.translate(cx, cz);
     ctx.rotate(-rot);
-    ctx.fillStyle = "#49962e";
+    // Deep moss edge
+    ctx.fillStyle = "#2d5425";
+    ctx.fillRect(-wPx / 2 - 3, -dPx / 2 - 3, wPx + 6, dPx + 6);
+    // Vibrant grass body
+    ctx.fillStyle = "#468c2d";
     ctx.fillRect(-wPx / 2, -dPx / 2, wPx, dPx);
-    // Subtle interior highlight
-    ctx.fillStyle = "#5cb03c";
-    ctx.fillRect(-wPx / 2 + 3, -dPx / 2 + 3, wPx - 6, dPx - 6);
+    // Sunlit center highlight
+    ctx.fillStyle = "#6cb73e";
+    ctx.fillRect(-wPx / 2 + 4, -dPx / 2 + 4, wPx - 8, dPx - 8);
     ctx.restore();
   }
 
-  // Lawns between buildings (parallel to sheds)
+  // Lawns between buildings
   drawRotatedLawn(0.6, 16.8, 26.0, 6.5, -0.13);     // Between Shed A and Shed B
   drawRotatedLawn(-0.2, -1.8, 24.0, 4.5, -0.13);     // Between Shed B and US A
   drawRotatedLawn(-1.7, -22.8, 22.0, 3.5, -0.13);    // Between US B and Shed D
   drawRotatedLawn(20.0, 10.0, 10.0, 16.0, -0.13);    // East courtyard lawn patch
+
+  // 1K. Scattered Wildflower and Grass Tufts across open canvas
+  let wfSeed = 2026;
+  const wfRnd = () => {
+    wfSeed = (wfSeed * 1664525 + 1013904223) % 4294967296;
+    return wfSeed / 4294967296;
+  };
+  const wfColors = ["#ffe869", "#fffbf0", "#8cbbf5", "#ffd24a"];
+  for (let f = 0; f < 380; f++) {
+    const [fx, fz] = toCanvas(
+      -120 + wfRnd() * 240,
+      -120 + wfRnd() * 240,
+    );
+    // Only in green areas
+    const pData = ctx.getImageData(Math.floor(fx), Math.floor(fz), 1, 1).data;
+    if (pData[1] > pData[0] * 1.05 && pData[1] > 60) {
+      ctx.fillStyle = wfColors[Math.floor(wfRnd() * wfColors.length)];
+      ctx.beginPath();
+      ctx.arc(fx, fz, 2.2 + wfRnd() * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   // Subtle organic canvas texture noise
   const imgData = ctx.getImageData(0, 0, 2048, 2048);
@@ -458,7 +849,7 @@ export function createEnvironment(scene) {
     return seed / 4294967296;
   };
   for (let i = 0; i < data.length; i += 4) {
-    const noise = (rnd() - 0.5) * 10;
+    const noise = (rnd() - 0.5) * 8;
     data[i] = Math.min(255, Math.max(0, data[i] + noise));
     data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
     data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
@@ -473,8 +864,9 @@ export function createEnvironment(scene) {
 
   const groundGeo = new THREE.PlaneGeometry(worldSize, worldSize, 32, 32);
   groundGeo.rotateX(-Math.PI / 2);
-  const groundMat = new THREE.MeshLambertMaterial({
+  const groundMat = createGhibliGroundMaterial({
     map: groundTexture,
+    sunDirection: new THREE.Vector3(-40, 85, 35).normalize(),
   });
   const groundMesh = new THREE.Mesh(groundGeo, groundMat);
   groundMesh.position.y = -0.06;
@@ -497,8 +889,6 @@ export function createEnvironment(scene) {
     thresholds: [0.64, 0.36, 0.02],
   });
 
-  // Fence perimeter encloses Kitchen, Shed A, Network room, Shed C:
-  // Labeled Gate opening is between [-21.4, 48.07] and [-26.4, 48.07] (centered at -23.895, 48.07).
   const gateX = -23.895;
   const gateZ = 48.07;
   const gateHalfW = 2.5;
@@ -580,7 +970,207 @@ export function createEnvironment(scene) {
   }
 
   // ==========================================================================
-  // 3. Ghibli 3D Distant Cumulus Clouds
+  // 3. 3D Stylized Ghibli Grass Tufts & Wildflowers (Ricardo Oliva Alonso style)
+  // Physical instanced 3D grass blade clusters swaying in the breeze
+  // ==========================================================================
+  const tuftPositions = [];
+  const flowerPositions = [];
+
+  let tSeed = 7331;
+  const tRnd = () => {
+    tSeed = (tSeed * 1664525 + 1013904223) % 4294967296;
+    return tSeed / 4294967296;
+  };
+
+  // 3A. Along the wooden perimeter fence
+  for (let seg = 0; seg < fencePerimeter.length - 1; seg++) {
+    const p1 = fencePerimeter[seg];
+    const p2 = fencePerimeter[seg + 1];
+    const dx = p2[0] - p1[0];
+    const dz = p2[1] - p1[1];
+    const dist = Math.hypot(dx, dz);
+    const count = Math.floor(dist / 1.35);
+    const nx = -dz / dist;
+    const nz = dx / dist;
+
+    for (let i = 0; i < count; i++) {
+      const frac = (i + tRnd() * 0.7) / count;
+      const x = p1[0] + dx * frac;
+      const z = p1[1] + dz * frac;
+      const offset = (tRnd() - 0.5) * 1.4;
+      tuftPositions.push({
+        x: x + nx * offset,
+        z: z + nz * offset,
+        scale: 0.85 + tRnd() * 0.45,
+        rot: tRnd() * Math.PI * 2,
+      });
+
+      if (tRnd() < 0.32) {
+        flowerPositions.push({
+          x: x + nx * (offset + (tRnd() - 0.5) * 0.5),
+          z: z + nz * (offset + (tRnd() - 0.5) * 0.5),
+          scale: 0.8 + tRnd() * 0.5,
+          rot: tRnd() * Math.PI * 2,
+        });
+      }
+    }
+  }
+
+  // 3B. Along the compound mud/grass boundary
+  for (let i = 0; i < compoundPts.length - 1; i++) {
+    const p1 = compoundPts[i];
+    const p2 = compoundPts[i + 1];
+    const dx = p2[0] - p1[0];
+    const dz = p2[1] - p1[1];
+    const dist = Math.hypot(dx, dz);
+    const count = Math.floor(dist / 1.6);
+    const nx = -dz / dist;
+    const nz = dx / dist;
+
+    for (let s = 0; s < count; s++) {
+      const frac = (s + tRnd() * 0.6) / count;
+      const x = p1[0] + dx * frac;
+      const z = p1[1] + dz * frac;
+      const offset = (tRnd() - 0.5) * 1.2;
+      tuftPositions.push({
+        x: x + nx * offset,
+        z: z + nz * offset,
+        scale: 0.8 + tRnd() * 0.4,
+        rot: tRnd() * Math.PI * 2,
+      });
+      if (tRnd() < 0.2) {
+        flowerPositions.push({
+          x: x + nx * (offset + (tRnd() - 0.5) * 0.4),
+          z: z + nz * (offset + (tRnd() - 0.5) * 0.4),
+          scale: 0.8 + tRnd() * 0.4,
+          rot: tRnd() * Math.PI * 2,
+        });
+      }
+    }
+  }
+
+  // 3C. Along building foundation aprons
+  const bAprons = [
+    { x: 0.0, z: 28.935, w: 34.0, d: 19.0 },
+    { x: 1.213, z: 4.667, w: 30.0, d: 10.0 },
+    { x: 5.414, z: -38.736, w: 36.0, d: 13.0 },
+    { x: -1.773, z: -28.095, w: 24.0, d: 7.0 },
+    { x: 27.909, z: 42.843, w: 11.5, d: 8.5 },
+  ];
+  for (const b of bAprons) {
+    const rot = -0.13;
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    const halfW = b.w / 2 + 0.4;
+    const halfD = b.d / 2 + 0.4;
+    const perimeterSteps = Math.floor((b.w + b.d) / 1.5);
+    for (let s = 0; s < perimeterSteps; s++) {
+      let lx, lz;
+      const side = tRnd();
+      if (side < 0.5) {
+        lx = (tRnd() - 0.5) * b.w;
+        lz = (tRnd() < 0.5 ? -1 : 1) * halfD;
+      } else {
+        lx = (tRnd() < 0.5 ? -1 : 1) * halfW;
+        lz = (tRnd() - 0.5) * b.d;
+      }
+      const wx = b.x + lx * cosR - lz * sinR;
+      const wz = b.z + lx * sinR + lz * cosR;
+      tuftPositions.push({
+        x: wx,
+        z: wz,
+        scale: 0.75 + tRnd() * 0.4,
+        rot: tRnd() * Math.PI * 2,
+      });
+    }
+  }
+
+  // 3D. In the inner lawn patches
+  const lawnPatches = [
+    { x: 0.6, z: 16.8, w: 24.0, d: 5.5 },
+    { x: -0.2, z: -1.8, w: 22.0, d: 3.5 },
+    { x: -1.7, z: -22.8, w: 20.0, d: 2.8 },
+  ];
+  for (const lp of lawnPatches) {
+    const rot = -0.13;
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    for (let i = 0; i < 28; i++) {
+      const lx = (tRnd() - 0.5) * lp.w;
+      const lz = (tRnd() - 0.5) * lp.d;
+      const wx = lp.x + lx * cosR - lz * sinR;
+      const wz = lp.z + lx * sinR + lz * cosR;
+      tuftPositions.push({
+        x: wx,
+        z: wz,
+        scale: 0.85 + tRnd() * 0.45,
+        rot: tRnd() * Math.PI * 2,
+      });
+      if (tRnd() < 0.25) {
+        flowerPositions.push({
+          x: wx + (tRnd() - 0.5) * 0.5,
+          z: wz + (tRnd() - 0.5) * 0.5,
+          scale: 0.75 + tRnd() * 0.45,
+          rot: tRnd() * Math.PI * 2,
+        });
+      }
+    }
+  }
+
+  // 3E. Scattered foreground meadow clusters outside south fence
+  for (let i = 0; i < 85; i++) {
+    const mx = -40 + tRnd() * 75;
+    const mz = 50 + tRnd() * 35;
+    tuftPositions.push({
+      x: mx,
+      z: mz,
+      scale: 0.85 + tRnd() * 0.5,
+      rot: tRnd() * Math.PI * 2,
+    });
+    if (tRnd() < 0.28) {
+      flowerPositions.push({
+        x: mx + (tRnd() - 0.5) * 0.6,
+        z: mz + (tRnd() - 0.5) * 0.6,
+        scale: 0.8 + tRnd() * 0.45,
+        rot: tRnd() * Math.PI * 2,
+      });
+    }
+  }
+
+  const grassGeo = createGhibliGrassGeometry();
+  const grassTuftMat = createGhibliGrassMaterial();
+  const grassInstMesh = new THREE.InstancedMesh(grassGeo, grassTuftMat, tuftPositions.length);
+  grassInstMesh.receiveShadow = true;
+
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < tuftPositions.length; i++) {
+    const tp = tuftPositions[i];
+    dummy.position.set(tp.x, 0, tp.z);
+    dummy.rotation.set(0, tp.rot, 0);
+    dummy.scale.set(tp.scale, tp.scale, tp.scale);
+    dummy.updateMatrix();
+    grassInstMesh.setMatrixAt(i, dummy.matrix);
+  }
+  grassInstMesh.instanceMatrix.needsUpdate = true;
+  groundGroup.add(grassInstMesh);
+
+  // Wildflower InstancedMesh
+  const flowerGeo = createGhibliWildflowerGeometry();
+  const wildflowerMat = grassTuftMat;
+  const flowerInstMesh = new THREE.InstancedMesh(flowerGeo, wildflowerMat, flowerPositions.length);
+  for (let i = 0; i < flowerPositions.length; i++) {
+    const fp = flowerPositions[i];
+    dummy.position.set(fp.x, 0, fp.z);
+    dummy.rotation.set(0, fp.rot, 0);
+    dummy.scale.set(fp.scale, fp.scale, fp.scale);
+    dummy.updateMatrix();
+    flowerInstMesh.setMatrixAt(i, dummy.matrix);
+  }
+  flowerInstMesh.instanceMatrix.needsUpdate = true;
+  groundGroup.add(flowerInstMesh);
+
+  // ==========================================================================
+  // 4. Ghibli 3D Distant Cumulus Clouds
   // Towering anime cumulus clouds along the distant horizon with slow drift
   // ==========================================================================
   const cloudsGroup = new THREE.Group();
@@ -641,6 +1231,12 @@ export function createEnvironment(scene) {
       forest = createForest(envGroup, exclusions, settings);
     },
     update(time, camera) {
+      if (groundMat && groundMat.uniforms && groundMat.uniforms.time) {
+        groundMat.uniforms.time.value = time;
+      }
+      if (grassTuftMat && grassTuftMat.uniforms && grassTuftMat.uniforms.time) {
+        grassTuftMat.uniforms.time.value = time;
+      }
       if (cloudsGroup) cloudsGroup.rotation.y = time * 0.002;
       if (forest) forest.update(time, camera);
     },

@@ -53,16 +53,36 @@ export function createKitchenInterior(kitchen) {
   block(interior, [0.55, 0.08, 0.85], [3.85, 1.13, 1.4], dark);
 
   const walkers = [];
+  let toonRamp = null;
+  function getToonRamp() {
+    if (!toonRamp) {
+      const c = document.createElement("canvas");
+      c.width = 4;
+      c.height = 1;
+      const x = c.getContext("2d");
+      const steps = [70, 135, 205, 255];
+      for (let i = 0; i < 4; i++) {
+        const v = steps[i];
+        x.fillStyle = `rgb(${v},${v},${v})`;
+        x.fillRect(i, 0, 1, 1);
+      }
+      toonRamp = new THREE.CanvasTexture(c);
+      toonRamp.minFilter = THREE.NearestFilter;
+      toonRamp.magFilter = THREE.NearestFilter;
+      toonRamp.generateMipmaps = false;
+    }
+    return toonRamp;
+  }
+
   const ghibliMat = (
     color,
     roughness = 0.85,
     emissive = 0x000000,
     emissiveIntensity = 0.08,
   ) =>
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshToonMaterial({
       color,
-      roughness,
-      metalness: 0.04,
+      gradientMap: getToonRamp(),
       emissive,
       emissiveIntensity,
     });

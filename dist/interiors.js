@@ -232,11 +232,31 @@ export function createInteriors(buildings, scene) {
   const cube = new THREE.BoxGeometry(1, 1, 1);
   const cone = new THREE.ConeGeometry(1, 1, 10);
   const cylinder = new THREE.CylinderGeometry(1, 1, 1, 10);
+  let toonRamp = null;
+  function getToonRamp() {
+    if (!toonRamp) {
+      const c = document.createElement("canvas");
+      c.width = 4;
+      c.height = 1;
+      const x = c.getContext("2d");
+      const steps = [70, 135, 205, 255];
+      for (let i = 0; i < 4; i++) {
+        const v = steps[i];
+        x.fillStyle = `rgb(${v},${v},${v})`;
+        x.fillRect(i, 0, 1, 1);
+      }
+      toonRamp = new THREE.CanvasTexture(c);
+      toonRamp.minFilter = THREE.NearestFilter;
+      toonRamp.magFilter = THREE.NearestFilter;
+      toonRamp.generateMipmaps = false;
+    }
+    return toonRamp;
+  }
+
   const ghibliMat = (color, emissive = 0x000000, emissiveIntensity = 0.08) =>
-    new THREE.MeshStandardMaterial({
+    new THREE.MeshToonMaterial({
       color,
-      roughness: 0.88,
-      metalness: 0.04,
+      gradientMap: getToonRamp(),
       emissive,
       emissiveIntensity,
     });

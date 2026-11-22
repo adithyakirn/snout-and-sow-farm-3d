@@ -2191,7 +2191,7 @@ function draw(frameTime = 0) {
   if (frameTime - lastAnimalUpdate >= 33) {
     if (interiors.animalRoot.visible) interiors.update(animalTime);
     if (kitchenInterior.peopleRoot.visible) kitchenInterior.update(animalTime);
-    if (environment.forestGroup.visible) environment.update(animalTime, view);
+    if (environment.update) environment.update(animalTime, view);
     lastAnimalUpdate = frameTime;
   }
   if (inCameraView) {
