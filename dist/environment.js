@@ -198,8 +198,8 @@ function createRicardoGrassGeometry() {
 
   // A clump has 2 stylized triangular spikes (1 primary upright, 1 smaller slightly leaning)
   const spikes = [
-    { ox: 0, oz: 0, r: 0.08, h: 0.44, rot: 0.0, leanX: 0.0, leanZ: 0.0, tipC: tipCol1 },
-    { ox: 0.08, oz: 0.04, r: 0.055, h: 0.32, rot: 1.2, leanX: 0.04, leanZ: 0.03, tipC: tipCol2 },
+    { ox: 0, oz: 0, r: 0.10, h: 0.52, rot: 0.0, leanX: 0.0, leanZ: 0.0, tipC: tipCol1 },
+    { ox: 0.10, oz: 0.05, r: 0.07, h: 0.38, rot: 1.2, leanX: 0.05, leanZ: 0.04, tipC: tipCol2 },
   ];
 
   for (const s of spikes) {
@@ -802,23 +802,37 @@ export function createEnvironment(scene) {
     return Math.hypot(px - (x1 + t * dx), pz - (z1 + t * dz));
   }
 
-  // 1. Vast Foreground Meadow Belt south of the fence (z: 48.5 to 88.0, x: -55 to 55)
-  const fgXSteps = 70;
-  const fgZSteps = 65;
-  for (let ix = 0; ix < fgXSteps; ix++) {
-    for (let iz = 0; iz < fgZSteps; iz++) {
-      const fracX = (ix + tRnd() * 0.85) / fgXSteps;
-      const fracZ = (iz + tRnd() * 0.85) / fgZSteps;
-      const x = -55.0 + fracX * 110.0;
-      const z = 48.5 + fracZ * 39.5;
-      if (distToRoad(x, z) < 4.2) continue; // Keep access road clear
+  // 1. Surrounding 360-Degree Meadow Belts (South, West, East, North)
+  // Ensures thick, tactile 3D diorama grass spikes appear in front of the camera from ANY viewing angle
+  const outerMeadowZones = [
+    // South Meadow Belt (in front of south fence)
+    { minX: -60.0, maxX: 60.0, minZ: 48.6, maxZ: 85.0, stepsX: 55, stepsZ: 32 },
+    // West Meadow Belt (in front of west fence - right before the camera when viewing Shed A/B from West)
+    { minX: -62.0, maxX: -29.8, minZ: -54.0, maxZ: 49.0, stepsX: 30, stepsZ: 65 },
+    // East Meadow Belt (in front of east fence past Kitchen)
+    { minX: 34.8, maxX: 62.0, minZ: -54.0, maxZ: 49.0, stepsX: 25, stepsZ: 65 },
+    // North Meadow Belt (in front of north fence past Shed C)
+    { minX: -60.0, maxX: 60.0, minZ: -80.0, maxZ: -53.5, stepsX: 55, stepsZ: 25 },
+  ];
 
-      tuftPositions.push({
-        x,
-        z,
-        scale: 0.85 + tRnd() * 0.35,
-        rot: tRnd() * Math.PI * 2,
-      });
+  for (const zone of outerMeadowZones) {
+    const xSpan = zone.maxX - zone.minX;
+    const zSpan = zone.maxZ - zone.minZ;
+    for (let ix = 0; ix < zone.stepsX; ix++) {
+      for (let iz = 0; iz < zone.stepsZ; iz++) {
+        const fracX = (ix + tRnd() * 0.85) / zone.stepsX;
+        const fracZ = (iz + tRnd() * 0.85) / zone.stepsZ;
+        const x = zone.minX + fracX * xSpan;
+        const z = zone.minZ + fracZ * zSpan;
+        if (distToRoad(x, z) < 4.2) continue; // Keep access road completely clear
+
+        tuftPositions.push({
+          x,
+          z,
+          scale: 0.9 + tRnd() * 0.35,
+          rot: tRnd() * Math.PI * 2,
+        });
+      }
     }
   }
 
