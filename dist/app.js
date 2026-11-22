@@ -524,6 +524,16 @@ const roofSwitches = {
 function switchLead(switchNumber, portIndex, fibre = false) {
   const item = roofSwitches[switchNumber];
   const start = fibre ? item.fibre : item.ports[portIndex];
+  if (switchNumber === 1) {
+    // East wall down-pipe directly into underground conduit trunk riser
+    const laneZ = (portIndex - 3.5) * 0.22;
+    return [
+      start.clone(),
+      item.shed.point(item.shed.w / 2 - 0.15, laneZ, 4.55),
+      item.shed.point(item.shed.w / 2 + 0.35, laneZ, 3.25),
+      item.shed.point(item.shed.w / 2 + 0.35, laneZ, 0.18),
+    ];
+  }
   const laneX = (portIndex - 3.5) * 0.4;
   return [
     start.clone(),
@@ -534,11 +544,30 @@ function switchLead(switchNumber, portIndex, fibre = false) {
 }
 const camGroup = new THREE.Group();
 scene.add(camGroup);
+
+const cameraShortTitles = {
+  A1: { shortTitle: "Shed A · North Footpath (West)", group: "Shed A" },
+  A2: { shortTitle: "Shed A · South Footpath (West)", group: "Shed A" },
+  A3: { shortTitle: "Shed A · North Footpath (East)", group: "Shed A" },
+  A4: { shortTitle: "Shed A · South Footpath (East)", group: "Shed A" },
+  B1: { shortTitle: "Shed B · West Entrance", group: "Shed B" },
+  B2: { shortTitle: "Shed B · East End", group: "Shed B" },
+  C1: { shortTitle: "Shed C · Central Footpath", group: "Shed C" },
+  C2: { shortTitle: "Shed C · Yard & Network Facing", group: "Shed C" },
+  D1: { shortTitle: "Shed D · Chicken Enclosure", group: "Shed D" },
+  G1: { shortTitle: "Main Entrance Gate", group: "Gate & Perimeter" },
+  K1: { shortTitle: "Kitchen Workspace Interior", group: "Kitchen" },
+  K2: { shortTitle: "Kitchen Yard · Gate Facing", group: "Kitchen" },
+};
+
 function addCamera(id, point, dir, switchId, description) {
   const isBullet = id === "G1" || id === "C2" || id === "D2" || id === "K2";
   const lens = isBullet ? "4.0mm" : "2.8mm";
   const hfov = isBullet ? 79 : 103;
   const type = isBullet ? "bullet" : "dome";
+  const meta = cameraShortTitles[id] || { shortTitle: description, group: "General" };
+  const shortTitle = meta.shortTitle;
+  const group = meta.group;
 
   const body = new THREE.Group();
   body.position.copy(point);
@@ -693,6 +722,8 @@ function addCamera(id, point, dir, switchId, description) {
     lens,
     hfov,
     description,
+    shortTitle,
+    group,
   };
   cameras.push(camera);
 
@@ -857,30 +888,155 @@ function route(id, points, color, dashed = false) {
   routes.push({ id, obj: group, type, materials, points, length });
   return group;
 }
+// Underground heavy-duty conduit trunk and central distribution chamber DP-1
+const dp1 = new THREE.Vector3(-14.6, 0.12, -12.2);
+
+const conduitPipes = [];
+function addConduitPipe(start, end, radius = 0.08, color = 0x243238) {
+  const diff = end.clone().sub(start);
+  const length = diff.length();
+  const geo = new THREE.CylinderGeometry(radius, radius, length, 16);
+  geo.rotateX(Math.PI / 2);
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.38,
+    metalness: 0.72,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(start.clone().addScaledVector(diff, 0.5));
+  mesh.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    diff.clone().normalize(),
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  conduitPipes.push(mesh);
+  return mesh;
+}
+
+// 3D Distribution Chamber DP-1 (Western service corridor between Upcoming Sheds US A and US B)
+const dp1Chamber = box(1.1, 0.22, 1.1, dp1.x, 0.11, dp1.z, mats.trim, scene);
+const dp1LidMat = new THREE.MeshStandardMaterial({
+  color: 0x364347,
+  roughness: 0.35,
+  metalness: 0.75,
+});
+const dp1Lid = box(0.92, 0.05, 0.92, dp1.x, 0.23, dp1.z, dp1LidMat, scene);
+dp1Lid.userData.id = "dp-1";
+pickables.push(dp1Lid);
+box(0.18, 0.02, 0.04, dp1.x - 0.25, 0.26, dp1.z, mats.metal, scene);
+box(0.18, 0.02, 0.04, dp1.x + 0.25, 0.26, dp1.z, mats.metal, scene);
+
+label(
+  "DP-1 · Conduit Hub",
+  dp1.clone().add(new THREE.Vector3(0, 1.4, 0)),
+  "dp-1",
+  "switch",
+);
+addEntry(
+  "dp-1",
+  "Underground Conduit Hub (DP-1)",
+  "Central underground distribution chamber (600x600mm precast concrete pit with Class C250 ductile iron inspection cover) located at the western service corridor between Upcoming Sheds US A and US B. Receives a single heavy-duty 63mm OD Class 1 HDPE trunk conduit buried 600mm under mud from the Network Room. Internally houses an IP68 gel-filled distribution junction with 5x Cat 6 F/UTP camera feeds and 4-core outdoor steel-armoured singlemode fibre link to PoE Switch 2 on Shed A. Sub-distributes North to Shed C & D, South to Shed B and Shed A, and East lateral provisions into US A and US B.",
+  dp1,
+);
+
+// 1. Single underground trunk pipe from Network Room to DP-1
+const networkTrunkRiser = network.point(network.w / 2 + 0.35, 0, 0.18);
+addConduitPipe(networkTrunkRiser, dp1, 0.1, 0x1f292e);
+
+// 2. North branch conduit towards Shed C and D
+const northBranchConduitEnd = c.point(-c.w / 2 - 1.2, c.d / 2 + 1.2, 0.18);
+addConduitPipe(dp1, northBranchConduitEnd, 0.07, 0x27353b);
+
+// 3. South branch conduit towards Shed B
+const southBranchConduitEnd = b.point(-b.w / 2 - 1.2, b.d / 2 + 1.2, 0.18);
+addConduitPipe(dp1, southBranchConduitEnd, 0.07, 0x27353b);
+
+// 4. South backbone conduit towards Shed A (housing steel-armoured fibre to Switch 2)
+const shedAConduitEntry = a.point(-a.w / 2 - 1.2, a.d / 2 + 1.2, 0.18);
+addConduitPipe(dp1, shedAConduitEntry, 0.07, 0x27353b);
+
+// 5. East lateral stubs into Upcoming Sheds US A and US B
+if (future.length >= 2) {
+  const usAStub = new THREE.Vector3(future[0].q.x - 12.0, 0.18, future[0].q.z);
+  addConduitPipe(dp1, usAStub, 0.05, 0x27353b);
+  const usBStub = new THREE.Vector3(future[1].q.x - 12.0, 0.18, future[1].q.z);
+  addConduitPipe(dp1, usBStub, 0.05, 0x27353b);
+}
+
 const assignedPorts = { 1: 0, 2: 0 };
 for (const [i, cam] of cameras.entries()) {
   const portIndex = assignedPorts[cam.switchId]++;
   cam.port = portIndex + 1;
   const lead = switchLead(cam.switchId, portIndex);
   const source = lead[lead.length - 1];
-  let lane = -20 - portIndex * 0.4;
   const q = cam.point;
   const shed = { A: a, B: b, C: c, D: d, K: kitchen, G: a }[cam.id[0]];
   let tail;
-  if (shed) {
+  if (cam.switchId === 1) {
+    // Cables from Switch 1 pass through the single underground trunk pipe to DP-1
+    const trunkStep = dp1
+      .clone()
+      .add(new THREE.Vector3(0, 0.05, (portIndex - 2) * 0.08));
+    if (cam.id[0] === "C") {
+      const entry = c.point(
+        -c.w / 2 - 1.2,
+        c.d / 2 + 1.2 + (portIndex % 2) * 0.35,
+        0.25,
+      );
+      const local = c.group.worldToLocal(q.clone());
+      const frontage = c.d / 2 + 1.3;
+      const endpointSide = Math.sign(local.x) * (c.w / 2 + 0.9);
+      const turn = c.point(endpointSide, frontage, 0.25);
+      const side = c.point(endpointSide, local.z, 0.25);
+      tail = [
+        trunkStep,
+        new THREE.Vector3(trunkStep.x, 0.25, entry.z),
+        entry,
+        turn,
+        side,
+      ];
+    } else if (cam.id[0] === "D") {
+      const entry = d.point(-d.w / 2 - 1.2, d.d / 2 + 1.2, 0.25);
+      const local = d.group.worldToLocal(q.clone());
+      const frontage = d.d / 2 + 1.3;
+      const endpointSide = Math.sign(local.x) * (d.w / 2 + 0.9);
+      const turn = d.point(endpointSide, frontage, 0.25);
+      const side = d.point(endpointSide, local.z, 0.25);
+      tail = [
+        trunkStep,
+        new THREE.Vector3(trunkStep.x, 0.25, entry.z),
+        entry,
+        turn,
+        side,
+      ];
+    } else if (cam.id[0] === "B") {
+      const entry = b.point(
+        -b.w / 2 - 1.2,
+        b.d / 2 + 1.2 + (portIndex % 2) * 0.35,
+        0.25,
+      );
+      const local = b.group.worldToLocal(q.clone());
+      const frontage = b.d / 2 + 1.3;
+      const endpointSide = Math.sign(local.x) * (b.w / 2 + 0.9);
+      const turn = b.point(endpointSide, frontage, 0.25);
+      const side = b.point(endpointSide, local.z, 0.25);
+      tail = [
+        trunkStep,
+        new THREE.Vector3(trunkStep.x, 0.25, entry.z),
+        entry,
+        turn,
+        side,
+      ];
+    } else {
+      tail = [trunkStep, new THREE.Vector3(trunkStep.x, 0.25, q.z)];
+    }
+  } else if (shed) {
     const local = shed.group.worldToLocal(q.clone());
     const frontage = shed.d / 2 + 1.3 + (portIndex % 4) * 0.35;
     const endpointSide = Math.sign(local.x) * (shed.w / 2 + 0.9);
-    const fromRight = cam.switchId === 1 && source.x > shed.group.position.x;
-    const entry = shed.point(
-      (fromRight ? 1 : -1) * (shed.w / 2 + 1.2),
-      frontage,
-      0.25,
-    );
-    if (cam.switchId === 1)
-      lane = fromRight
-        ? Math.max(source.x, entry.x) + 1.2 + portIndex * 0.35
-        : Math.min(source.x, entry.x) - 1.2 - portIndex * 0.35;
+    const entry = shed.point(-shed.w / 2 - 1.2, frontage, 0.25);
     const turn = shed.point(endpointSide, frontage, 0.25);
     const side = shed.point(endpointSide, local.z, 0.25);
     if (cam.switchId === 2 && (cam.id[0] === "A" || cam.id[0] === "G")) {
@@ -889,19 +1045,10 @@ for (const [i, cam] of cameras.entries()) {
     } else if (cam.switchId === 2 && cam.id[0] === "K") {
       tail = [new THREE.Vector3(source.x, 0.25, entry.z), entry, turn, side];
     } else {
-      tail = [
-        new THREE.Vector3(lane, 0.25, source.z),
-        new THREE.Vector3(lane, 0.25, entry.z),
-        entry,
-        turn,
-        side,
-      ];
+      tail = [entry, turn, side];
     }
   } else {
-    tail = [
-      new THREE.Vector3(lane, 0.25, source.z),
-      new THREE.Vector3(lane, 0.25, q.z),
-    ];
+    tail = [new THREE.Vector3(source.x, 0.25, q.z)];
   }
   let cameraTail = [new THREE.Vector3(q.x, 0.25, q.z), q.clone()];
   if (cam.id === "K1") {
@@ -916,18 +1063,15 @@ for (const [i, cam] of cameras.entries()) {
 }
 const fibreStart = switchLead(1, 8, true);
 const fibreEnd = switchLead(2, 8, true);
-const startGround = fibreStart[fibreStart.length - 1];
-const endGround = fibreEnd[fibreEnd.length - 1];
-const fibreCorridor =
-  network.group.position.x > a.group.position.x
-    ? Math.max(startGround.x, a.point(a.w / 2 + 1.5, a.d / 2 + 1).x) + 1.2
-    : Math.min(startGround.x, a.point(-a.w / 2 - 1.5, a.d / 2 + 1).x) - 1.2;
+const fibreTrunkStep = dp1.clone().add(new THREE.Vector3(0, 0.08, 0.15));
+const fibreEndGround = fibreEnd[fibreEnd.length - 1];
 route(
   "fibre",
   [
     ...fibreStart,
-    new THREE.Vector3(fibreCorridor, 0.25, startGround.z),
-    new THREE.Vector3(fibreCorridor, 0.25, endGround.z),
+    fibreTrunkStep,
+    new THREE.Vector3(fibreTrunkStep.x, 0.25, fibreEndGround.z),
+    new THREE.Vector3(fibreEndGround.x, 0.25, fibreEndGround.z),
     ...fibreEnd.reverse(),
   ],
   0xf1bd62,
@@ -935,18 +1079,16 @@ route(
 routes[routes.length - 1].switchIds = [1, 2];
 for (const [i, { id, q }] of future.entries()) {
   const lead = switchLead(1, 5 + i);
-  const ground = lead[lead.length - 1];
-  const rightSide = ground.x >= q.x;
-  const provisionX = q.x + (rightSide ? 12.5 : -12.5);
-  const futureLane = rightSide
-    ? Math.max(ground.x, provisionX) + 1 + i * 0.4
-    : Math.min(ground.x, provisionX) - 1 - i * 0.4;
+  const futureTrunkStep = dp1
+    .clone()
+    .add(new THREE.Vector3(0, 0.05, 0.25 + i * 0.1));
+  const provisionX = q.x - 12.5;
   route(
     id,
     [
       ...lead,
-      new THREE.Vector3(futureLane, 0.25, ground.z),
-      new THREE.Vector3(futureLane, 0.25, q.z),
+      futureTrunkStep,
+      new THREE.Vector3(futureTrunkStep.x, 0.25, q.z),
       new THREE.Vector3(provisionX, 0.25, q.z),
     ],
     0x98cf87,
@@ -1183,7 +1325,7 @@ function updateCameraLook() {
 function updateCameraHUD(cam) {
   const isBullet = cam.type === "bullet";
   $("cctv-cam-badge").textContent = "CAM " + cam.id;
-  $("cctv-cam-title").textContent = cam.description;
+  $("cctv-cam-title").textContent = cam.shortTitle || cam.description;
   const typeBadge = $("cctv-type-badge");
   typeBadge.className = isBullet ? "cctv-badge-bullet" : "cctv-badge-dome";
   typeBadge.textContent = isBullet ? "BULLET 4.0mm" : "DOME 2.8mm";
@@ -1194,8 +1336,24 @@ function updateCameraHUD(cam) {
     " Port " +
     cam.port;
   $("cctv-zoom-badge").textContent = camZoom.toFixed(1) + "x";
-  const sel = $("cctv-cam-select");
-  if (sel) sel.value = cam.id;
+
+  // Update custom dropdown trigger
+  const ddBadge = $("cctv-dd-badge");
+  if (ddBadge) ddBadge.textContent = "CAM " + cam.id;
+  const ddTitle = $("cctv-dd-title");
+  if (ddTitle) ddTitle.textContent = cam.shortTitle || cam.id;
+
+  // Update active state in custom dropdown list
+  const items = document.querySelectorAll(".cctv-dd-item");
+  items.forEach((item) => {
+    if (item.dataset.camId === cam.id) {
+      item.classList.add("active");
+      item.setAttribute("aria-selected", "true");
+    } else {
+      item.classList.remove("active");
+      item.setAttribute("aria-selected", "false");
+    }
+  });
 }
 
 function startCCTVClock() {
@@ -1306,6 +1464,14 @@ function exitCameraView() {
 
   document.body.classList.remove("camera-mode");
 
+  // Close custom dropdown panel if open
+  const ddPanel = $("cctv-dropdown-panel");
+  if (ddPanel) ddPanel.classList.add("hidden");
+  const ddBackdrop = $("cctv-dropdown-backdrop");
+  if (ddBackdrop) ddBackdrop.classList.add("hidden");
+  const ddBtn = $("cctv-dropdown-btn");
+  if (ddBtn) ddBtn.setAttribute("aria-expanded", "false");
+
   controls.enabled = true;
   view.fov = savedFov || 42;
   view.aspect = innerWidth / innerHeight;
@@ -1344,20 +1510,126 @@ function resetCameraAngle() {
   if (badge) badge.textContent = "1.0x";
 }
 
-function populateCCTVSelector() {
-  const sel = $("cctv-cam-select");
-  if (!sel) return;
-  sel.replaceChildren();
-  for (const c of cameras) {
-    const opt = document.createElement("option");
-    opt.value = c.id;
-    opt.textContent = `${c.id} · ${c.type === "bullet" ? "4mm Bullet" : "2.8mm Dome"} (${c.id.startsWith("G") ? "Gate" : c.id.startsWith("K") ? "Kitchen" : "Shed " + c.id[0]})`;
-    sel.append(opt);
+function setupCCTVDropdown() {
+  const container = $("cctv-dropdown-container");
+  const btn = $("cctv-dropdown-btn");
+  const panel = $("cctv-dropdown-panel");
+  const list = $("cctv-dropdown-list");
+  const backdrop = $("cctv-dropdown-backdrop");
+  const closeBtn = $("cctv-dropdown-close");
+  if (!container || !btn || !panel || !list) return;
+
+  function openDropdown() {
+    panel.classList.remove("hidden");
+    if (backdrop) backdrop.classList.remove("hidden");
+    btn.setAttribute("aria-expanded", "true");
+    const activeItem = list.querySelector(".cctv-dd-item.active");
+    if (activeItem) {
+      setTimeout(() => {
+        activeItem.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }, 50);
+    }
   }
-  sel.onchange = (e) => {
-    select(e.target.value);
-    enterCameraView(e.target.value);
+
+  function closeDropdown() {
+    panel.classList.add("hidden");
+    if (backdrop) backdrop.classList.add("hidden");
+    btn.setAttribute("aria-expanded", "false");
+  }
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    if (panel.classList.contains("hidden")) {
+      openDropdown();
+    } else {
+      closeDropdown();
+    }
   };
+
+  if (closeBtn) {
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      closeDropdown();
+    };
+  }
+
+  if (backdrop) {
+    backdrop.onclick = (e) => {
+      e.stopPropagation();
+      closeDropdown();
+    };
+  }
+
+  // Populate grouped list
+  list.replaceChildren();
+
+  const groups = {};
+  for (const cam of cameras) {
+    const grp = cam.group || "Other";
+    if (!groups[grp]) groups[grp] = [];
+    groups[grp].push(cam);
+  }
+
+  for (const [groupName, groupCams] of Object.entries(groups)) {
+    const grpHeader = document.createElement("div");
+    grpHeader.className = "cctv-dd-group-header";
+    grpHeader.textContent = groupName;
+    list.appendChild(grpHeader);
+
+    for (const cam of groupCams) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "cctv-dd-item";
+      item.dataset.camId = cam.id;
+      item.setAttribute("role", "option");
+      item.setAttribute(
+        "aria-selected",
+        cam.id === activeCamId ? "true" : "false",
+      );
+      if (cam.id === activeCamId) item.classList.add("active");
+
+      const badge = document.createElement("span");
+      badge.className = `cctv-dd-item-badge ${cam.type === "bullet" ? "bullet" : "dome"}`;
+      badge.textContent = cam.id;
+
+      const info = document.createElement("div");
+      info.className = "cctv-dd-item-info";
+
+      const title = document.createElement("div");
+      title.className = "cctv-dd-item-title";
+      title.textContent = cam.shortTitle || cam.id;
+
+      const sub = document.createElement("div");
+      sub.className = "cctv-dd-item-sub";
+      sub.textContent = `${cam.type === "bullet" ? "4.0mm Bullet" : "2.8mm Dome"} · Switch ${cam.switchId} Port ${cam.port}`;
+
+      info.appendChild(title);
+      info.appendChild(sub);
+
+      const check = document.createElement("span");
+      check.className = "cctv-dd-item-check";
+      check.setAttribute("aria-hidden", "true");
+
+      item.appendChild(badge);
+      item.appendChild(info);
+      item.appendChild(check);
+
+      item.onclick = (e) => {
+        e.stopPropagation();
+        closeDropdown();
+        select(cam.id);
+        enterCameraView(cam.id);
+      };
+
+      list.appendChild(item);
+    }
+  }
+
+  window.addEventListener("click", (e) => {
+    if (!panel.classList.contains("hidden") && !container.contains(e.target)) {
+      closeDropdown();
+    }
+  });
 }
 
 function select(id) {
@@ -1909,10 +2181,19 @@ $("cctv-prev-cam").onclick = () => stepCamera(-1);
 $("cctv-next-cam").onclick = () => stepCamera(1);
 $("cctv-reset-angle").onclick = resetCameraAngle;
 $("cctv-exit-btn").onclick = exitCameraView;
-populateCCTVSelector();
+setupCCTVDropdown();
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
+    const ddPanel = $("cctv-dropdown-panel");
+    if (ddPanel && !ddPanel.classList.contains("hidden")) {
+      ddPanel.classList.add("hidden");
+      const ddBackdrop = $("cctv-dropdown-backdrop");
+      if (ddBackdrop) ddBackdrop.classList.add("hidden");
+      const ddBtn = $("cctv-dropdown-btn");
+      if (ddBtn) ddBtn.setAttribute("aria-expanded", "false");
+      return;
+    }
     if (inCameraView) exitCameraView();
   } else if (inCameraView) {
     if (e.key === "ArrowLeft") stepCamera(-1);

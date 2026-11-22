@@ -61,38 +61,62 @@
         <div class="cctv-corner bottom-right"></div>
         <div class="cctv-crosshair"></div>
       </div>
+      <div id="cctv-dropdown-backdrop" class="cctv-dropdown-backdrop hidden" aria-hidden="true"></div>
       <div class="cctv-bottom-bar">
-        <button
-          id="cctv-prev-cam"
-          class="cctv-nav-btn"
-          aria-label="Previous camera"
-        >
-          ◀ Prev
-        </button>
-        <div class="cctv-cam-selector-wrapper">
-          <select id="cctv-cam-select" aria-label="Select camera feed"></select>
+        <div class="cctv-dropdown-container" id="cctv-dropdown-container">
+          <button
+            type="button"
+            id="cctv-dropdown-btn"
+            class="cctv-dropdown-btn"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-label="Select camera feed"
+          >
+            <span id="cctv-dd-badge" class="cctv-dd-badge">CAM A1</span>
+            <span id="cctv-dd-title" class="cctv-dd-title">Shed A · North Footpath West</span>
+            <span class="cctv-dd-chevron" aria-hidden="true">▾</span>
+          </button>
+          
+          <div id="cctv-dropdown-panel" class="cctv-dropdown-panel hidden" role="listbox">
+            <div class="cctv-dropdown-header">
+              <span>Select Camera Feed (12 Cameras)</span>
+              <button type="button" id="cctv-dropdown-close" class="cctv-dropdown-close" aria-label="Close menu">&times;</button>
+            </div>
+            <div id="cctv-dropdown-list" class="cctv-dropdown-list">
+              <!-- Dynamically populated grouped options -->
+            </div>
+          </div>
         </div>
-        <button
-          id="cctv-next-cam"
-          class="cctv-nav-btn"
-          aria-label="Next camera"
-        >
-          Next ▶
-        </button>
-        <button
-          id="cctv-reset-angle"
-          class="cctv-util-btn"
-          title="Reset digital zoom to 1.0x wide view"
-        >
-          1.0x Zoom
-        </button>
-        <button
-          id="cctv-exit-btn"
-          class="cctv-exit-btn"
-          aria-label="Exit camera view"
-        >
-          ✕ Exit View
-        </button>
+        <div class="cctv-actions-row">
+          <button
+            id="cctv-prev-cam"
+            class="cctv-nav-btn"
+            aria-label="Previous camera"
+          >
+            ◀ Prev
+          </button>
+          <button
+            id="cctv-next-cam"
+            class="cctv-nav-btn"
+            aria-label="Next camera"
+          >
+            Next ▶
+          </button>
+          <button
+            id="cctv-reset-angle"
+            class="cctv-util-btn"
+            title="Reset digital zoom to 1.0x wide view"
+          >
+            1.0x Zoom
+          </button>
+          <button
+            id="cctv-exit-btn"
+            class="cctv-exit-btn"
+            aria-label="Exit camera view"
+          >
+            &times; Exit View
+          </button>
+        </div>
       </div>
     </div>
     <header>
