@@ -6,12 +6,13 @@ import { LineMaterial } from "./vendor/lines/LineMaterial.js";
 import { createInteriors } from "./interiors.js";
 import { createKitchenInterior } from "./kitchen.js";
 import { createEnvironment, createGhibliSky } from "./environment.js";
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const $ = (id) => document.getElementById(id);
 const scene = new THREE.Scene();
 scene.background = createGhibliSky();
 scene.fog = new THREE.Fog("#cce6f8", 220, 950);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 800 ? 1.5 : 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia("(pointer: coarse)").matches ? 1.25 : 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -57,8 +58,8 @@ function reset(top = false) {
   }
 }
 reset();
-scene.add(new THREE.HemisphereLight(0xd4edff, 0x3a6034, 2.3));
-const sun = new THREE.DirectionalLight(0xfff5db, 3.2);
+scene.add(new THREE.HemisphereLight(0xd4e5ed, 0x4a513c, 1.65));
+const sun = new THREE.DirectionalLight(0xfff0d6, 2.5);
 sun.position.set(-40, 85, 35);
 sun.castShadow = true;
 const shadowSize = innerWidth < 800 ? 1024 : 2048;
@@ -691,68 +692,114 @@ function addCamera(id, point, dir, switchId, description) {
     point,
   );
 }
-const east = new THREE.Vector3(1, 0, 0.13),
-  west = east.clone().negate();
-addCamera("A1", a.point(-16.3, -5), east, 2, "Shed A, left end");
-addCamera("A2", a.point(-16.3, 5), east, 2, "Shed A, left end");
-addCamera("A3", a.point(16.3, -5), west, 2, "Shed A, right end");
-addCamera("A4", a.point(16.3, 5), west, 2, "Shed A, right end");
-addCamera("B1", b.point(-14.3, 0), east, 1, "Shed B, left end");
-addCamera("B2", b.point(14.3, 0), west, 1, "Shed B, right end");
+// Shed A (32m x 17m): 4 dome cameras, 2 at each end looking down north & south pen banks
+addCamera(
+  "A1",
+  a.point(-14.8, -4.25, 2.7),
+  a.point(8.0, -1.2, 0.75).sub(a.point(-14.8, -4.25, 2.7)),
+  2,
+  "Shed A west entrance, north aisle (103° wide view across north pens and walkway)",
+);
+addCamera(
+  "A2",
+  a.point(-14.8, 4.25, 2.7),
+  a.point(8.0, 1.2, 0.75).sub(a.point(-14.8, 4.25, 2.7)),
+  2,
+  "Shed A west entrance, south aisle (103° wide view across south pens and walkway)",
+);
+addCamera(
+  "A3",
+  a.point(14.8, -4.25, 2.7),
+  a.point(-8.0, -1.2, 0.75).sub(a.point(14.8, -4.25, 2.7)),
+  2,
+  "Shed A east end, north aisle (103° wide view across north pens and walkway)",
+);
+addCamera(
+  "A4",
+  a.point(14.8, 4.25, 2.7),
+  a.point(-8.0, 1.2, 0.75).sub(a.point(14.8, 4.25, 2.7)),
+  2,
+  "Shed A east end, south aisle (103° wide view across south pens and walkway)",
+);
+
+// Shed B (28m x 8m): 2 dome cameras along central aisle covering all 19 pens
+addCamera(
+  "B1",
+  b.point(-12.8, 0, 2.65),
+  b.point(6.0, 0, 0.7).sub(b.point(-12.8, 0, 2.65)),
+  1,
+  "Shed B west entrance, central aisle (103° wide view across all 19 pig pens)",
+);
+addCamera(
+  "B2",
+  b.point(12.8, 0, 2.65),
+  b.point(-6.0, 0, 0.7).sub(b.point(12.8, 0, 2.65)),
+  1,
+  "Shed B east end, central aisle (103° wide view across all 19 pig pens)",
+);
+
+// Shed C (34m x 11m, 20 pig pens): C1 looks inside, C2 is 4mm bullet facing outside
 addCamera(
   "C1",
-  c.point(-16.8, -0.8),
-  east,
+  c.point(-15.6, 0, 2.7),
+  c.point(8.0, 0, 0.75).sub(c.point(-15.6, 0, 2.7)),
   1,
-  "Shed C entrance, facing inside",
+  "Shed C west entrance, central aisle (103° wide view across 20 pig pens)",
 );
+const c2Pos = c.point(-17.2, 1.2, 2.8);
+const c2Target = network.group.position
+  .clone()
+  .add(gate)
+  .multiplyScalar(0.5)
+  .setY(1.2);
 addCamera(
   "C2",
-  c.point(-17.4, 1),
-  network.group.position
-    .clone()
-    .add(gate)
-    .multiplyScalar(0.5)
-    .setY(1.2)
-    .sub(c.point(-17.4, 1)),
+  c2Pos,
+  c2Target.clone().sub(c2Pos),
   1,
-  "Shed C entrance, facing toward the network room and gate",
+  "Shed C entrance exterior, 4.0mm bullet facing southwest toward network room and gate",
 );
+
+// Shed D (22m x 5m, chicken enclosure): D1 looks inside across enclosure
 addCamera(
   "D1",
-  d.point(-11.3, 0),
-  east,
+  d.point(-9.8, 0, 2.45),
+  d.point(4.0, 0, 0.65).sub(d.point(-9.8, 0, 2.45)),
   1,
-  "Shed D · chicken enclosure, assumed left-end position",
+  "Shed D chicken enclosure (103° wide view across free-range chicken area)",
 );
-const gateCameraPosition = a.point(-a.w / 2 - 0.4, a.d / 2 + 0.35, 2.9);
-const kitchenInsidePosition = kitchen.point(0.45, -2.45, 2.6);
-const kitchenGatePosition = kitchen.point(
-  -kitchen.w / 2 - 0.3,
-  kitchen.d / 2 + 0.25,
-  2.9,
-);
+
+// Gate G1 (4.0mm bullet camera): Beside Shed A corner aimed at main gate
+const gateCameraPosition = a.point(-a.w / 2 - 0.35, a.d / 2 + 0.35, 2.85);
 const gateTarget = gate.clone().add(new THREE.Vector3(0, 1.2, 0));
 addCamera(
   "G1",
   gateCameraPosition,
   gateTarget.clone().sub(gateCameraPosition),
   2,
-  "Mounted beside the gate-facing corner of Shed A, aimed at the gate",
+  "Mounted beside Shed A corner, 4.0mm bullet aimed directly at main farm gate",
+);
+
+// Kitchen (9m x 6m): K1 interior dome, K2 exterior bullet
+const kitchenInsidePosition = kitchen.point(0.45, -2.45, 2.6);
+const kitchenGatePosition = kitchen.point(
+  -kitchen.w / 2 - 0.3,
+  kitchen.d / 2 + 0.25,
+  2.85,
 );
 addCamera(
   "K1",
   kitchenInsidePosition,
-  kitchen.point(2.2, 0.7, 1.1).sub(kitchenInsidePosition),
+  kitchen.point(3.8, 1.8, 0.85).sub(kitchenInsidePosition),
   2,
-  "Inside the right-hand kitchen room, facing across the working area",
+  "Inside kitchen workspace (103° wide view across preparation area and staff)",
 );
 addCamera(
   "K2",
   kitchenGatePosition,
   gateTarget.clone().sub(kitchenGatePosition),
   2,
-  "Outside the kitchen building, facing the gate",
+  "Outside kitchen building, 4.0mm bullet facing west toward main gate",
 );
 // Each physical run has its own corridor lane and a continuous path to its camera.
 function route(id, points, color, dashed = false) {
@@ -897,6 +944,17 @@ for (const [id, description] of Object.entries({
   "shed-d": "Open chicken enclosure with illustrative animated chickens.",
 }))
   entries.get(id).description += " " + description;
+environment.plant({
+  buildings: Object.values(buildings).map(b => ({
+    x:b.group.position.x, z:b.group.position.z, w:b.w, d:b.d, angle:b.group.rotation.y,
+  })),
+  corridors: [
+    ...routes.map(r => r.points),
+    [gate, new THREE.Vector3(-50, 0, 120)],
+    [gate, cameras.find(c => c.id === "G1").point],
+    [gate, cameras.find(c => c.id === "K2").point],
+  ],
+});
 // Similarity registration from three visible roofs in the supplied map.
 const registration = {
   a: -0.15228071380903005,
@@ -936,13 +994,14 @@ const groundShadows = new THREE.Mesh(
 groundShadows.rotation.x = -Math.PI / 2;
 groundShadows.position.y = -0.04;
 groundShadows.receiveShadow = true;
-environment.groundGroup.add(groundShadows);
+scene.add(groundShadows);
+groundShadows.position.y = 0.02;
 
 function updateMapStatus() {
   $("map-status").textContent =
     "3D Forest & Terrain · " +
-    environment.treeCount +
-    " trees · Calibrated metres";
+    (environment.forestGroup.visible ? "Ghibli style trees · " : "") +
+    "Calibrated metres";
 }
 let selected = "overview",
   activePane = null,
@@ -1043,14 +1102,22 @@ try {
   for (const id of layerIds)
     if (typeof saved[id] === "boolean") $(id).checked = saved[id];
 } catch {}
-// Default to 3D Forest & Terrain environment version 4 (satellite completely removed).
+// Restore 3D terrain and trees context once; preserve subsequent explicit choices.
 try {
-  if (localStorage.getItem("farm-atlas-environment-version") !== "4") {
+  if (localStorage.getItem("farm-atlas-forest-version") !== "2") {
     $("trees").checked = true;
     $("ground-3d").checked = true;
-    localStorage.setItem("farm-atlas-environment-version", "4");
+    localStorage.setItem("farm-atlas-forest-version", "2");
   }
+  $("forest-quality").value = localStorage.getItem("farm-atlas-forest-quality") || "auto";
 } catch {}
+function applyForestQuality() {
+  environment.forest.setQuality($("forest-quality").value);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, environment.forest.quality === "low" ? 1.15 : 1.5));
+  try { localStorage.setItem("farm-atlas-forest-quality", $("forest-quality").value); } catch {}
+}
+$("forest-quality").onchange = applyForestQuality;
+applyForestQuality();
 
 // ==========================================================================
 // CCTV Camera Viewport & HUD State
@@ -1068,6 +1135,11 @@ let camDragStart = [0, 0];
 let touchStartDistance = 0;
 let cctvClockTimer = null;
 
+// Dedicated camera interior fill light to illuminate shed pens and livestock
+const cameraFillLight = new THREE.PointLight(0xfff6e8, 0, 48, 1.1);
+cameraFillLight.castShadow = false;
+scene.add(cameraFillLight);
+
 function applyCameraFov(cam) {
   const aspect = innerWidth / innerHeight;
   const hfovRad = THREE.MathUtils.degToRad(cam.hfov / camZoom);
@@ -1080,20 +1152,12 @@ function applyCameraFov(cam) {
 function updateCameraLook() {
   const cam = cameras.find((c) => c.id === activeCamId);
   if (!cam) return;
+  // Fixed mount CCTV: lens positioned slightly in front of mount plate
   const lensPos = cam.point.clone().addScaledVector(cam.direction, 0.42);
   view.position.copy(lensPos);
 
-  const baseDir = cam.direction.clone().normalize();
-  const lookDir = baseDir.clone();
-  lookDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camLookYaw);
-
-  const rightAxis = new THREE.Vector3(0, 1, 0)
-    .cross(lookDir)
-    .normalize()
-    .negate();
-  lookDir.applyAxisAngle(rightAxis, camLookPitch);
-
-  const lookTarget = lensPos.clone().addScaledVector(lookDir, 25);
+  // Non-movable camera: look target is locked along the camera's fixed optical axis
+  const lookTarget = lensPos.clone().addScaledVector(cam.direction, 25);
   view.lookAt(lookTarget);
 }
 
@@ -1105,7 +1169,7 @@ function updateCameraHUD(cam) {
   typeBadge.className = isBullet ? "cctv-badge-bullet" : "cctv-badge-dome";
   typeBadge.textContent = isBullet ? "BULLET 4.0mm" : "DOME 2.8mm";
   $("cctv-lens-spec").textContent =
-    (isBullet ? "79° Standard View" : "103° Wide View") +
+    (isBullet ? "79° Fixed Lens" : "103° Wide View") +
     " · Switch " +
     cam.switchId +
     " Port " +
@@ -1152,6 +1216,7 @@ function enterCameraView(camId) {
   activeCamId = camId;
   controls.enabled = false;
   controls.autoRotate = false;
+  $("rotate").setAttribute("aria-pressed", "false");
   $("rotate").classList.remove("active");
   document.body.classList.add("camera-mode");
 
@@ -1164,6 +1229,28 @@ function enterCameraView(camId) {
   cam.marker.visible = false;
   cam.arrow.visible = false;
 
+  const isInteriorCam = [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "B1",
+    "B2",
+    "C1",
+    "D1",
+    "K1",
+  ].includes(cam.id);
+
+  if (isInteriorCam) {
+    // Hide roofs so daylight illuminates the shed interior, and activate camera fill light
+    roofs.forEach((r) => (r.visible = false));
+    cameraFillLight.position.copy(cam.point);
+    cameraFillLight.intensity = 2.8;
+  } else {
+    roofs.forEach((r) => (r.visible = $("roofs").checked));
+    cameraFillLight.intensity = 0;
+  }
+
   applyCameraFov(cam);
   updateCameraLook();
   updateCameraHUD(cam);
@@ -1174,7 +1261,9 @@ function enterCameraView(camId) {
   $("top").classList.remove("active");
   $("interior-view").classList.remove("active");
   $("gesture-hint").textContent =
-    "Drag to pan/tilt camera · Scroll or pinch to zoom";
+    cam.type === "bullet"
+      ? "Fixed CCTV bullet mount (79° FOV) · Non-movable · Scroll or pinch to zoom"
+      : "Fixed CCTV dome mount (103° wide FOV) · Non-movable · Scroll or pinch to zoom";
 
   closePane();
 }
@@ -1193,6 +1282,9 @@ function exitCameraView() {
 
   inCameraView = false;
   activeCamId = null;
+  cameraFillLight.intensity = 0;
+  roofs.forEach((r) => (r.visible = $("roofs").checked));
+
   document.body.classList.remove("camera-mode");
 
   controls.enabled = true;
@@ -1292,12 +1384,12 @@ function select(id) {
       const isBullet = cam.type === "bullet";
       const specPill = document.createElement("div");
       specPill.className = "camera-spec-pill " + (isBullet ? "bullet" : "dome");
-      specPill.innerHTML = `<strong>${isBullet ? "4.0mm Bullet Camera" : "2.8mm Dome Camera"}</strong><br>${isBullet ? "Narrow / Focused View (79° HFOV)" : "Wide-Angle View (103° HFOV)"} · PoE Switch ${cam.switchId} (Port ${cam.port})`;
+      specPill.innerHTML = `<strong>${isBullet ? "4.0mm Bullet Camera" : "2.8mm Dome Camera"}</strong><br>${isBullet ? "Fixed Focused View (79° HFOV)" : "Fixed Wide-Angle View (103° HFOV)"} · PoE Switch ${cam.switchId} (Port ${cam.port})`;
       $("detail-extra").append(specPill);
 
       const viewBtn = document.createElement("button");
       viewBtn.className = "primary camera-view-action-btn";
-      viewBtn.textContent = `📹 View ${cam.id} Viewport (${cam.lens} ${isBullet ? "Bullet" : "Dome"})`;
+      viewBtn.textContent = `View ${cam.id} Viewport (${cam.lens} ${isBullet ? "Bullet" : "Dome"})`;
       viewBtn.onclick = () => enterCameraView(cam.id);
       $("detail-extra").append(viewBtn);
     }
@@ -1412,7 +1504,7 @@ $("reset").onclick = () => {
 };
 $("rotate").onclick = () => {
   if (mapView) setView(false);
-  controls.autoRotate = !controls.autoRotate;
+  controls.autoRotate = $("rotate").getAttribute("aria-pressed") !== "true";
   $("rotate").setAttribute("aria-pressed", String(controls.autoRotate));
   $("rotate").classList.toggle("active", controls.autoRotate);
 };
@@ -1492,23 +1584,16 @@ let down;
 
 renderer.domElement.addEventListener("pointerdown", (e) => {
   if (inCameraView) {
-    isCamDragging = true;
-    camDragStart = [e.clientX, e.clientY];
+    // Fixed CCTV camera mount: non-movable viewport
     return;
   }
   down = [e.clientX, e.clientY];
 });
 
 window.addEventListener("pointermove", (e) => {
-  if (inCameraView && isCamDragging) {
-    const dx = e.clientX - camDragStart[0];
-    const dy = e.clientY - camDragStart[1];
-    camDragStart = [e.clientX, e.clientY];
-    const sens = 0.0035;
-    camLookYaw -= dx * sens;
-    camLookPitch -= dy * sens;
-    camLookYaw = THREE.MathUtils.clamp(camLookYaw, -1.1, 1.1);
-    camLookPitch = THREE.MathUtils.clamp(camLookPitch, -0.7, 0.45);
+  if (inCameraView) {
+    // Fixed CCTV camera mount: non-movable viewport
+    return;
   }
 });
 
@@ -1518,7 +1603,6 @@ window.addEventListener("pointerup", () => {
 
 renderer.domElement.addEventListener("pointerup", (e) => {
   if (inCameraView) {
-    isCamDragging = false;
     return;
   }
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 7) return;
@@ -1720,7 +1804,7 @@ function draw(frameTime = 0) {
   const delta = Math.min(0.05, Math.max(0, (frameTime - lastFrameTime) / 1000));
   lastFrameTime = frameTime;
   if (
-    $("animation").checked &&
+    $("animation").checked && !reducedMotion.matches &&
     (interiors.animalRoot.visible ||
       kitchenInterior.peopleRoot.visible ||
       environment.forestGroup.visible) &&
@@ -1730,12 +1814,13 @@ function draw(frameTime = 0) {
   if (frameTime - lastAnimalUpdate >= 33) {
     if (interiors.animalRoot.visible) interiors.update(animalTime);
     if (kitchenInterior.peopleRoot.visible) kitchenInterior.update(animalTime);
-    if (environment.forestGroup.visible) environment.update(animalTime);
+    if (environment.forestGroup.visible) environment.update(animalTime, view);
     lastAnimalUpdate = frameTime;
   }
   if (inCameraView) {
     updateCameraLook();
   } else {
+    controls.autoRotate = $("rotate").getAttribute("aria-pressed") === "true" && $("animation").checked && !reducedMotion.matches;
     controls.update();
     // Keep navigation inside the supplied satellite coverage.
     const boundedTarget = controls.target.clone();
@@ -1812,6 +1897,14 @@ window.addEventListener("keydown", (e) => {
 $("loading").classList.add("hidden");
 draw();
 window.farmModel = {
+  get rendering() {
+    return {calls: renderer.info.render.calls, triangles: renderer.info.render.triangles,
+      geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+      pixelRatio: renderer.getPixelRatio(), forest: environment.forest.stats(),
+      camera: view.position.toArray(), target: controls.target.toArray(),
+      reducedMotion: reducedMotion.matches,
+      shaderErrors: renderer.info.programs.filter(p => p.diagnostics && !p.diagnostics.runnable).length};
+  },
   cameraCount: cameras.length,
   cameraPositions: cameras.map((camera) => ({
     id: camera.id,

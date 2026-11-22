@@ -45,12 +45,13 @@
           <div class="cctv-spec-row">
             <span id="cctv-type-badge" class="cctv-badge-dome">DOME 2.8mm</span>
             <span id="cctv-lens-spec">103° Wide View · Switch 2 Port 1</span>
+            <span class="cctv-badge-fixed">FIXED CCTV</span>
             <span id="cctv-zoom-badge" class="cctv-zoom-badge">1.0x</span>
           </div>
         </div>
         <div class="cctv-telemetry">
           <div id="cctv-timestamp" class="cctv-time">2026-11-22 11:55:00</div>
-          <div class="cctv-feed-quality">4K UHD · 30 FPS · H.265</div>
+          <div class="cctv-feed-quality">FIXED MOUNT · NON-MOVABLE · 4K UHD</div>
         </div>
       </div>
       <div class="cctv-reticle-overlay" aria-hidden="true">
@@ -81,9 +82,9 @@
         <button
           id="cctv-reset-angle"
           class="cctv-util-btn"
-          title="Reset viewing angle"
+          title="Reset digital zoom to 1.0x wide view"
         >
-          Reset Angle
+          1.0x Zoom
         </button>
         <button
           id="cctv-exit-btn"
@@ -165,8 +166,8 @@
             /></label>
             <label
               ><span
-                ><b>Animal movement</b
-                ><small>Pause or resume the animation</small></span
+                ><b>Animation & wind</b
+                ><small>Pause movement · respects reduced motion</small></span
               ><input id="animation" type="checkbox" checked role="switch"
             /></label>
             <label
@@ -180,12 +181,13 @@
 
             <label
               ><span
-                ><b>3D Forest & trees</b
+                ><b>Forest</b
                 ><small
-                  >1,500+ trees, palms & vegetation exact to site</small
+                  >Decorative planting · not surveyed locations</small
                 ></span
               ><input id="trees" type="checkbox" checked role="switch"
             /></label>
+            <label class="forest-quality"><span><b>Forest quality</b><small>Use Light to reduce detail and pixel ratio</small></span><select id="forest-quality" aria-label="Forest quality"><option value="auto">Auto</option><option value="balanced">Detailed</option><option value="low">Light</option></select></label>
             <label
               ><span
                 ><b>3D Ground & compound</b

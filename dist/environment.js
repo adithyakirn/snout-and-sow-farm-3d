@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { treeData } from "./tree-data.js";
+import { createForest } from "./forest.js";
 
 /**
  * Creates the Studio Ghibli Anime Sky Texture
@@ -74,7 +74,7 @@ export function createGhibliSky() {
  * Custom Ghibli Cel-Shader Material
  * Directly computes stepped cel lighting from surface normals and light vector
  * using a 4-tier discrete color palette (Highlight -> Midtone -> Mid-Shadow -> Deep Shadow),
- * replicating the technique from craftzdog/ghibli-style-shader and Kazuo Oga's painted trees.
+ * for the existing compound props. Foliage lives in forest.js.
  */
 export function createGhibliMaterial({
   colors,
@@ -96,11 +96,7 @@ export function createGhibliMaterial({
     vertexShader: /* glsl */ `
       #include <fog_pars_vertex>
 
-      #ifdef USE_INSTANCING
-        attribute mat4 instanceMatrix;
-      #endif
       #ifdef USE_INSTANCING_COLOR
-        attribute vec3 instanceColor;
         varying vec3 vInstanceColor;
       #endif
 
@@ -144,7 +140,7 @@ export function createGhibliMaterial({
       #endif
 
       void main() {
-        vec3 lightVector = normalize(lightPosition - vWorldPosition);
+        vec3 lightVector = normalize(lightPosition);
         float brightness = dot(vWorldNormal, lightVector);
 
         vec3 col;
@@ -165,6 +161,8 @@ export function createGhibliMaterial({
 
         gl_FragColor = vec4(col, 1.0);
 
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
         #include <fog_fragment>
       }
     `,
@@ -185,8 +183,7 @@ export function createEnvironment(scene) {
   const groundGroup = new THREE.Group();
   envGroup.add(groundGroup);
 
-  const forestGroup = new THREE.Group();
-  envGroup.add(forestGroup);
+  let forest;
 
   // ==========================================================================
   // 1. Ghibli Landscape Ground (Terraced Water Paddies & Warm Dirt Paths)
@@ -511,467 +508,12 @@ export function createEnvironment(scene) {
     fenceGroup.add(leaf);
   }
 
-  // ==========================================================================
-  // 3. Ghibli 3D Trees with Multi-Tier Cloud Canopies & Radial Normals
-  // ==========================================================================
-  // Group trees by type:
-  // 0: Broadleaf Cloud Tree (billowing multi-lobed canopy)
-  // 1: Coconut Palm (arching fan fronds)
-  // 2: Japanese Cedar / Sugi (stacked conifer tiers)
-  // 3: Puffy Low Bush
-  const typeLists = { 0: [], 1: [], 2: [], 3: [] };
-  for (const t of treeData) {
-    typeLists[t[2]].push(t);
-  }
-
-  // Materials with Custom Ghibli Cel-Shaders
-  const ghibliFoliageMat = createGhibliMaterial({
-    colors: ["#9ddb67", "#4d9d48", "#2b6940", "#173f34"],
-    thresholds: [0.62, 0.35, -0.05],
-  });
-
-  const ghibliCedarMat = createGhibliMaterial({
-    colors: ["#4d8e6c", "#2c664a", "#1a4332", "#0f291f"],
-    thresholds: [0.65, 0.38, -0.02],
-  });
-
-  const ghibliPalmFrondMat = createGhibliMaterial({
-    colors: ["#b2e258", "#5fb63a", "#327725", "#1c4a1a"],
-    thresholds: [0.60, 0.32, -0.06],
-    side: THREE.DoubleSide,
-  });
-
-  const ghibliTrunkMat = createGhibliMaterial({
-    colors: ["#d4b285", "#9f7652", "#64442e", "#3a2418"],
-    thresholds: [0.65, 0.35, 0.0],
-  });
-
-  const ghibliBushMat = createGhibliMaterial({
-    colors: ["#b2ea6b", "#68ba40", "#3b7f2a", "#1e4b1a"],
-    thresholds: [0.62, 0.34, -0.05],
-  });
-
-  // Helper: Build multi-lobe cloud canopy with individual radial outward normals
-  function createCloudCanopy(lobes, crownCenterY) {
-    const positions = [];
-    const normals = [];
-    const indices = [];
-
-    for (const [lx, ly, lz, lr] of lobes) {
-      const geo = new THREE.SphereGeometry(lr, 9, 7);
-      const pos = geo.attributes.position;
-      const idx = geo.index;
-      const baseIdx = positions.length / 3;
-
-      for (let i = 0; i < pos.count; i++) {
-        let vx = pos.getX(i);
-        let vy = pos.getY(i);
-        let vz = pos.getZ(i);
-
-        // Subtle organic cloud/leaf puff perturbation (like cauliflower foliage clumps)
-        const pLen = Math.hypot(vx, vy, vz) || 1;
-        const noise = 1.0 + 0.08 * Math.sin(vx * 2.5 + vy * 3.2) * Math.cos(vz * 2.7);
-        vx = (vx / pLen) * lr * noise;
-        vy = (vy / pLen) * lr * noise;
-        vz = (vz / pLen) * lr * noise;
-
-        const wx = vx + lx;
-        const wy = vy + ly;
-        const wz = vz + lz;
-        positions.push(wx, wy, wz);
-
-        // Outward radial normal: 75% from individual clump center + 25% from overall crown
-        const lnx = vx;
-        const lny = vy;
-        const lnz = vz;
-        const lLen = Math.hypot(lnx, lny, lnz) || 1;
-
-        const cnx = wx;
-        const cny = wy - crownCenterY;
-        const cnz = wz;
-        const cLen = Math.hypot(cnx, cny, cnz) || 1;
-
-        const nx = (lnx / lLen) * 0.75 + (cnx / cLen) * 0.25;
-        const ny = (lny / lLen) * 0.75 + (cny / cLen) * 0.25;
-        const nz = (lnz / lLen) * 0.75 + (cnz / cLen) * 0.25;
-        const nLen = Math.hypot(nx, ny, nz) || 1;
-        normals.push(nx / nLen, ny / nLen, nz / nLen);
-      }
-
-      for (let i = 0; i < idx.count; i++) {
-        indices.push(baseIdx + idx.getX(i));
-      }
-    }
-
-    const combined = new THREE.BufferGeometry();
-    combined.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    combined.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(normals, 3),
-    );
-    combined.setIndex(indices);
-    return combined;
-  }
-
-  // --- Geometry 0: Broadleaf Cloud Canopy (10 multi-tiered sculpted lobes) ---
-  const broadleafLobes = [
-    [0, 9.6, 0, 2.3],          // Top crown
-    [-1.7, 8.8, -0.6, 1.9],     // Upper left billow
-    [1.8, 9.0, 0.4, 1.8],       // Upper right billow
-    [-1.4, 7.6, 1.3, 2.0],      // Mid front-left billow
-    [1.4, 7.4, 1.1, 1.9],       // Mid front-right billow
-    [-0.3, 8.0, -1.6, 1.9],     // Mid back billow
-    [-2.2, 6.0, 0.2, 1.7],      // Lower left canopy shelf
-    [2.1, 6.2, -0.4, 1.6],      // Lower right canopy shelf
-    [0.3, 5.8, 1.6, 1.5],       // Lower front canopy shelf
-    [-1.1, 5.6, -1.3, 1.4],     // Lower rear shelf
-  ];
-  const broadleafCanopyGeo = createCloudCanopy(broadleafLobes, 7.5);
-
-  // Broadleaf Trunk with 3 Branch Arms reaching into the foliage
-  function createBroadleafTrunk() {
-    const positions = [];
-    const normals = [];
-    const indices = [];
-
-    // Main tapered trunk
-    const mainGeo = new THREE.CylinderGeometry(0.38, 0.62, 5.6, 8);
-    mainGeo.translate(0, 2.8, 0);
-    const p1 = mainGeo.attributes.position;
-    const n1 = mainGeo.attributes.normal;
-    const i1 = mainGeo.index;
-    for (let i = 0; i < p1.count; i++) {
-      positions.push(p1.getX(i), p1.getY(i), p1.getZ(i));
-      normals.push(n1.getX(i), n1.getY(i), n1.getZ(i));
-    }
-    for (let i = 0; i < i1.count; i++) {
-      indices.push(i1.getX(i));
-    }
-
-    // Branch 1 (left)
-    const b1Geo = new THREE.CylinderGeometry(0.18, 0.32, 2.8, 6);
-    b1Geo.rotateZ(0.5);
-    b1Geo.translate(-1.1, 5.4, 0.2);
-    const p2 = b1Geo.attributes.position;
-    const n2 = b1Geo.attributes.normal;
-    const i2 = b1Geo.index;
-    const base2 = positions.length / 3;
-    for (let i = 0; i < p2.count; i++) {
-      positions.push(p2.getX(i), p2.getY(i), p2.getZ(i));
-      normals.push(n2.getX(i), n2.getY(i), n2.getZ(i));
-    }
-    for (let i = 0; i < i2.count; i++) {
-      indices.push(base2 + i2.getX(i));
-    }
-
-    // Branch 2 (right)
-    const b2Geo = new THREE.CylinderGeometry(0.18, 0.3, 2.7, 6);
-    b2Geo.rotateZ(-0.52);
-    b2Geo.translate(1.1, 5.6, -0.2);
-    const p3 = b2Geo.attributes.position;
-    const n3 = b2Geo.attributes.normal;
-    const i3 = b2Geo.index;
-    const base3 = positions.length / 3;
-    for (let i = 0; i < p3.count; i++) {
-      positions.push(p3.getX(i), p3.getY(i), p3.getZ(i));
-      normals.push(n3.getX(i), n3.getY(i), n3.getZ(i));
-    }
-    for (let i = 0; i < i3.count; i++) {
-      indices.push(base3 + i3.getX(i));
-    }
-
-    // Branch 3 (forward)
-    const b3Geo = new THREE.CylinderGeometry(0.16, 0.26, 2.4, 6);
-    b3Geo.rotateX(0.48);
-    b3Geo.translate(0.2, 5.2, 1.0);
-    const p4 = b3Geo.attributes.position;
-    const n4 = b3Geo.attributes.normal;
-    const i4 = b3Geo.index;
-    const base4 = positions.length / 3;
-    for (let i = 0; i < p4.count; i++) {
-      positions.push(p4.getX(i), p4.getY(i), p4.getZ(i));
-      normals.push(n4.getX(i), n4.getY(i), n4.getZ(i));
-    }
-    for (let i = 0; i < i4.count; i++) {
-      indices.push(base4 + i4.getX(i));
-    }
-
-    const combined = new THREE.BufferGeometry();
-    combined.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    combined.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(normals, 3),
-    );
-    combined.setIndex(indices);
-    return combined;
-  }
-  const broadleafTrunkGeo = createBroadleafTrunk();
-
-  // --- Geometry 2: Japanese Cedar / Sugi (5 stacked conical tiers) ---
-  function createCedarCanopy() {
-    const positions = [];
-    const normals = [];
-    const indices = [];
-    const tiers = [
-      { r: 2.6, h: 3.4, y: 4.8 },
-      { r: 2.2, h: 3.2, y: 7.0 },
-      { r: 1.7, h: 2.9, y: 9.1 },
-      { r: 1.2, h: 2.6, y: 11.0 },
-      { r: 0.65, h: 2.3, y: 12.8 },
-    ];
-    for (const t of tiers) {
-      const geo = new THREE.ConeGeometry(t.r, t.h, 8);
-      const pos = geo.attributes.position;
-      const idx = geo.index;
-      const baseIdx = positions.length / 3;
-      for (let i = 0; i < pos.count; i++) {
-        const vx = pos.getX(i);
-        const vy = pos.getY(i) + t.y;
-        const vz = pos.getZ(i);
-        positions.push(vx, vy, vz);
-
-        // Flared conifer normal
-        const nx = vx;
-        const ny = (vy - t.y) * 0.4;
-        const nz = vz;
-        const len = Math.hypot(nx, ny, nz) || 1;
-        normals.push(nx / len, ny / len, nz / len);
-      }
-      for (let i = 0; i < idx.count; i++) {
-        indices.push(baseIdx + idx.getX(i));
-      }
-    }
-    const combined = new THREE.BufferGeometry();
-    combined.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(positions, 3),
-    );
-    combined.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(normals, 3),
-    );
-    combined.setIndex(indices);
-    return combined;
-  }
-  const cedarCanopyGeo = createCedarCanopy();
-  const cedarTrunkGeo = new THREE.CylinderGeometry(0.24, 0.45, 6.5, 7);
-  cedarTrunkGeo.translate(0, 3.25, 0);
-
-  // --- Geometry 1: Coconut Palm (curved trunk + arching fan fronds) ---
-  const palmTrunkGeo = new THREE.CylinderGeometry(0.2, 0.36, 11, 7);
-  const pPos = palmTrunkGeo.attributes.position;
-  for (let i = 0; i < pPos.count; i++) {
-    const y = pPos.getY(i);
-    const curve = Math.sin(((y + 5.5) / 11) * Math.PI * 0.75) * 0.85;
-    pPos.setX(i, pPos.getX(i) + curve);
-  }
-  palmTrunkGeo.computeVertexNormals();
-  palmTrunkGeo.translate(0, 5.5, 0);
-
-  // 8 sculpted palm fronds arching outwards
-  const palmCrownGeo = new THREE.BufferGeometry();
-  const crownPositions = [];
-  const crownNormals = [];
-  const crownIndices = [];
-  for (let f = 0; f < 8; f++) {
-    const frondAngle = (f / 8) * Math.PI * 2;
-    const cosA = Math.cos(frondAngle);
-    const sinA = Math.sin(frondAngle);
-    const baseIdx = crownPositions.length / 3;
-    for (let seg = 0; seg <= 4; seg++) {
-      const frac = seg / 4;
-      const reach = frac * 3.6;
-      const drop = Math.pow(frac, 1.8) * 1.6;
-      const w = Math.sin(frac * Math.PI) * 0.52;
-      const cx = reach * cosA;
-      const cz = reach * sinA;
-      const cy = 11.0 - drop;
-      const rx = -sinA * w;
-      const rz = cosA * w;
-      crownPositions.push(cx - rx, cy, cz - rz);
-      crownPositions.push(cx + rx, cy, cz + rz);
-      crownNormals.push(0, 1, 0, 0, 1, 0);
-    }
-    for (let seg = 0; seg < 4; seg++) {
-      const a = baseIdx + seg * 2;
-      const b = a + 1;
-      const c = a + 2;
-      const d = a + 3;
-      crownIndices.push(a, b, c, b, d, c);
-    }
-  }
-  palmCrownGeo.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(crownPositions, 3),
-  );
-  palmCrownGeo.setAttribute(
-    "normal",
-    new THREE.Float32BufferAttribute(crownNormals, 3),
-  );
-  palmCrownGeo.setIndex(crownIndices);
-
-  // --- Geometry 3: Puffy Low Bush (4 cloud lobes) ---
-  const bushLobes = [
-    [0, 1.2, 0, 1.4],
-    [-1.0, 1.0, -0.4, 1.15],
-    [1.0, 1.1, 0.3, 1.2],
-    [0.2, 1.8, 0.1, 1.05],
-  ];
-  const bushGeo = createCloudCanopy(bushLobes, 1.1);
-
-  // ==========================================================================
-  // 4. InstancedMeshes with Subtle Hue/Saturation Variety
-  // ==========================================================================
-  const dummy = new THREE.Object3D();
-  const dummyColor = new THREE.Color();
-
-  // 1. Broadleaf Trees (Type 0)
-  const broadleafTrunkMesh = new THREE.InstancedMesh(
-    broadleafTrunkGeo,
-    ghibliTrunkMat,
-    typeLists[0].length,
-  );
-  const broadleafCanopyMesh = new THREE.InstancedMesh(
-    broadleafCanopyGeo,
-    ghibliFoliageMat,
-    typeLists[0].length,
-  );
-
-  for (let i = 0; i < typeLists[0].length; i++) {
-    const [x, z, , s] = typeLists[0][i];
-    dummy.position.set(x, 0, z);
-    dummy.rotation.y = (i * 2.11) % (Math.PI * 2);
-    dummy.scale.set(s, s * (0.95 + (i % 5) * 0.03), s);
-    dummy.updateMatrix();
-    broadleafTrunkMesh.setMatrixAt(i, dummy.matrix);
-    broadleafCanopyMesh.setMatrixAt(i, dummy.matrix);
-
-    // Natural artist variation: mix of warm lime-emerald and cool Ghibli jade
-    if (i % 3 === 0) {
-      // Cool anime jade tint (matching craftzdog circled tree!)
-      dummyColor.setRGB(0.76, 1.05, 1.12);
-    } else if (i % 3 === 1) {
-      // Warm sunlit golden-lime tint
-      dummyColor.setRGB(1.08, 1.06, 0.88);
-    } else {
-      // Rich emerald grass green
-      dummyColor.setRGB(0.95, 1.02, 0.96);
-    }
-    broadleafCanopyMesh.setColorAt(i, dummyColor);
-  }
-  broadleafTrunkMesh.instanceMatrix.needsUpdate = true;
-  broadleafCanopyMesh.instanceMatrix.needsUpdate = true;
-  if (broadleafCanopyMesh.instanceColor)
-    broadleafCanopyMesh.instanceColor.needsUpdate = true;
-  forestGroup.add(broadleafTrunkMesh, broadleafCanopyMesh);
-
-  // 2. Coconut Palms (Type 1)
-  const palmTrunkMesh = new THREE.InstancedMesh(
-    palmTrunkGeo,
-    ghibliTrunkMat,
-    typeLists[1].length,
-  );
-  const palmCrownMesh = new THREE.InstancedMesh(
-    palmCrownGeo,
-    ghibliPalmFrondMat,
-    typeLists[1].length,
-  );
-
-  for (let i = 0; i < typeLists[1].length; i++) {
-    const [x, z, , s] = typeLists[1][i];
-    dummy.position.set(x, 0, z);
-    dummy.rotation.y = (i * 1.37) % (Math.PI * 2);
-    dummy.scale.set(s, s * (0.92 + (i % 5) * 0.04), s);
-    dummy.updateMatrix();
-    palmTrunkMesh.setMatrixAt(i, dummy.matrix);
-    palmCrownMesh.setMatrixAt(i, dummy.matrix);
-
-    dummyColor.setRGB(
-      0.95 + ((i % 4) - 2) * 0.03,
-      1.0 + ((i % 5) - 2) * 0.02,
-      0.92 + ((i % 3) - 1) * 0.04,
-    );
-    palmCrownMesh.setColorAt(i, dummyColor);
-  }
-  palmTrunkMesh.instanceMatrix.needsUpdate = true;
-  palmCrownMesh.instanceMatrix.needsUpdate = true;
-  if (palmCrownMesh.instanceColor)
-    palmCrownMesh.instanceColor.needsUpdate = true;
-  forestGroup.add(palmTrunkMesh, palmCrownMesh);
-
-  // 3. Japanese Cedars / Sugi (Type 2)
-  const cedarTrunkMesh = new THREE.InstancedMesh(
-    cedarTrunkGeo,
-    ghibliTrunkMat,
-    typeLists[2].length,
-  );
-  const cedarCanopyMesh = new THREE.InstancedMesh(
-    cedarCanopyGeo,
-    ghibliCedarMat,
-    typeLists[2].length,
-  );
-
-  for (let i = 0; i < typeLists[2].length; i++) {
-    const [x, z, , s] = typeLists[2][i];
-    dummy.position.set(x, 0, z);
-    dummy.rotation.y = (i * 1.73) % (Math.PI * 2);
-    dummy.scale.set(s, s * 1.1, s);
-    dummy.updateMatrix();
-    cedarTrunkMesh.setMatrixAt(i, dummy.matrix);
-    cedarCanopyMesh.setMatrixAt(i, dummy.matrix);
-
-    dummyColor.setRGB(
-      0.92 + ((i % 5) - 2) * 0.02,
-      1.0 + ((i % 4) - 2) * 0.02,
-      1.04 + ((i % 3) - 1) * 0.03,
-    );
-    cedarCanopyMesh.setColorAt(i, dummyColor);
-  }
-  cedarTrunkMesh.instanceMatrix.needsUpdate = true;
-  cedarCanopyMesh.instanceMatrix.needsUpdate = true;
-  if (cedarCanopyMesh.instanceColor)
-    cedarCanopyMesh.instanceColor.needsUpdate = true;
-  forestGroup.add(cedarTrunkMesh, cedarCanopyMesh);
-
-  // 4. Shrubs (Type 3)
-  const shrubMesh = new THREE.InstancedMesh(
-    bushGeo,
-    ghibliBushMat,
-    typeLists[3].length,
-  );
-  for (let i = 0; i < typeLists[3].length; i++) {
-    const [x, z, , s] = typeLists[3][i];
-    dummy.position.set(x, 0, z);
-    dummy.rotation.y = (i * 0.91) % (Math.PI * 2);
-    dummy.scale.set(s, s, s);
-    dummy.updateMatrix();
-    shrubMesh.setMatrixAt(i, dummy.matrix);
-    dummyColor.setRGB(1.0, 1.0, 0.95);
-    shrubMesh.setColorAt(i, dummyColor);
-  }
-  shrubMesh.instanceMatrix.needsUpdate = true;
-  if (shrubMesh.instanceColor) shrubMesh.instanceColor.needsUpdate = true;
-  forestGroup.add(shrubMesh);
-
-  // Gentle wind breeze sway
-  function update(time) {
-    if (!forestGroup.visible) return;
-    palmCrownMesh.rotation.y = Math.sin(time * 0.8) * 0.035;
-    broadleafCanopyMesh.rotation.y = Math.cos(time * 0.65) * 0.025;
-    cedarCanopyMesh.rotation.y = Math.sin(time * 0.5) * 0.015;
-  }
-
   return {
-    envGroup,
-    groundGroup,
-    forestGroup,
-    treeCount: treeData.length,
-    update,
+    envGroup, groundGroup,
+    get forestGroup() { return forest.group; },
+    get treeCount() { return forest.trees.length; },
+    get forest() { return forest; },
+    plant(exclusions, settings) { forest = createForest(envGroup, exclusions, settings); },
+    update(time, camera) { forest.update(time, camera); },
   };
 }

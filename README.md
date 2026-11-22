@@ -33,12 +33,12 @@ A mobile-first 3D farm infrastructure and CCTV planning viewer built with **Thre
 
 - **3D Forest, Trees & Ground Terrain**: Replaces flat 2D satellite photo tiles with native Three.js 3D procedural terrain and over 1,500 individual 3D trees and coconut palms positioned exactly from high-resolution satellite imagery. Features a warm dirt farm yard, driveway avenues, concrete shed aprons, surrounding agricultural plots, a 3D perimeter fence with an iron entrance gate, and gentle wind breeze animations rendered via high-performance InstancedMesh (5 draw calls).
 - **12-Camera CCTV Network**: Interactive camera models with direction arrows, coordinates, connection highlights, and calculated cable route lengths.
-- **First-Person Camera Viewport**: Tap any camera to see its live lens perspective. Accurately simulates 2.8 mm wide-angle dome cameras (~103° HFOV) and 4.0 mm bullet cameras (~79° HFOV for G1, D2, and K2) with a live CCTV HUD, real-time timestamp, pan/tilt controls, digital zoom, and quick camera switching.
+- **First-Person Camera Viewport**: Tap any camera to inspect its live viewport. Accurately simulates fixed-mount CCTV units: 2.8 mm wide-angle dome cameras (~103° HFOV) and 4.0 mm bullet cameras (~79° HFOV for G1, C2, and K2). Interior shed cameras are pitched downward along central aisles and pens with dedicated illumination and automatic roof clearance, featuring a live CCTV HUD, digital zoom, and rapid feed switching.
 - **Detailed Cable Routing**: Distinct visible roof switches, individual camera drops, inter-switch fibre links, and future expansion provisions.
 - **Interactive Building Shells**: Toggle between exterior overhead roofs and interior inspection mode ("Inside" view) for sheds and facilities.
 - **Instanced Animated Livestock**: 3D animated pigs and chickens rendered using Three.js instanced meshes for fast 60 FPS mobile rendering.
 - **Real-Time Ground Measurement**: Two-point surface distance measurement tool in metres for on-site cable and clearance estimation.
-- **Granular Layer Controls**: Toggle satellite imagery, roofs, shells, cameras, viewing arrows, wiring types, labels, grid, and animals with auto-saved browser preferences.
+- **Granular Layer Controls**: Toggle 3D terrain, roofs, shells, cameras, viewing arrows, wiring types, labels, grid, and animals with auto-saved browser preferences.
 - **Zero-Build & Zero-Dependency**: Pure vanilla ES modules—no bundlers (Webpack/Vite) or npm dependencies required to run.
 
 ---
@@ -102,7 +102,8 @@ The viewer seamlessly switches between a full 3D orbital perspective and a 2D no
 ### Layer Controls
 
 The expandable **Layers** panel allows toggling specific scene elements on and off:
-- **Satellite**: Toggles base aerial imagery.
+- **Forest**: Decorative Ghibli-styled planting and palms.
+- **3D Ground & compound**: Toggles dirt yard, pathways, fences, aprons and compound floor.
 - **Roofs / Shells**: Show/hide building structures or see through to the ground.
 - **Cameras & Arrows**: Toggles camera bodies and direction cone vectors.
 - **Cat 6 / Fibre / Future Cables**: Isolates specific network segments.
