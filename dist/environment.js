@@ -176,6 +176,156 @@ export function createGhibliMaterial({
  * Replaces flat 2D satellite aerial imagery with painterly 3D terrain,
  * terraced water paddies, and multi-lobed cloud-foliage trees.
  */
+
+/**
+ * Low-poly Stylized Grass Spike Geometry (Ricardo Oliva Alonso style)
+ * As seen in CodePen KwKwddJ: sharp, 3-sided pointed triangular cones with flat face normals.
+ * Features a cluster of 2 tapered triangular spikes with vertex colors
+ * (soft anime green base -> sunlit pastel lime tip).
+ */
+function createRicardoGrassGeometry() {
+  const geo = new THREE.BufferGeometry();
+  const positions = [];
+  const normals = [];
+  const colors = [];
+
+  // Colors sampled directly from Ricardo Oliva Alonso reference image:
+  // Root: [0.40, 0.64, 0.28] (soft shadow anime green #66a347)
+  // Tip:  [0.82, 0.93, 0.58] (bright sunlit lime tip #d2ee94)
+  const rootCol = [0.40, 0.64, 0.28];
+  const tipCol1 = [0.84, 0.94, 0.60];
+  const tipCol2 = [0.78, 0.90, 0.54];
+
+  // A clump has 2 stylized triangular spikes (1 primary upright, 1 smaller slightly leaning)
+  const spikes = [
+    { ox: 0, oz: 0, r: 0.08, h: 0.44, rot: 0.0, leanX: 0.0, leanZ: 0.0, tipC: tipCol1 },
+    { ox: 0.08, oz: 0.04, r: 0.055, h: 0.32, rot: 1.2, leanX: 0.04, leanZ: 0.03, tipC: tipCol2 },
+  ];
+
+  for (const s of spikes) {
+    const sides = 3;
+    const basePts = [];
+    for (let i = 0; i < sides; i++) {
+      const a = s.rot + (i / sides) * Math.PI * 2;
+      basePts.push([s.ox + Math.cos(a) * s.r, 0, s.oz + Math.sin(a) * s.r]);
+    }
+    const tip = [s.ox + s.leanX, s.h, s.oz + s.leanZ];
+
+    // 3 triangular side faces
+    for (let i = 0; i < sides; i++) {
+      const p1 = basePts[i];
+      const p2 = basePts[(i + 1) % sides];
+
+      // Calculate flat face normal
+      const e1x = p2[0] - p1[0];
+      const e1y = p2[1] - p1[1];
+      const e1z = p2[2] - p1[2];
+
+      const e2x = tip[0] - p1[0];
+      const e2y = tip[1] - p1[1];
+      const e2z = tip[2] - p1[2];
+
+      let nx = e1y * e2z - e1z * e2y;
+      let ny = e1z * e2x - e1x * e2z;
+      let nz = e1x * e2y - e1y * e2x;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      nx /= len;
+      ny /= len;
+      nz /= len;
+
+      positions.push(...p1);
+      normals.push(nx, ny, nz);
+      colors.push(...rootCol);
+
+      positions.push(...p2);
+      normals.push(nx, ny, nz);
+      colors.push(...rootCol);
+
+      positions.push(...tip);
+      normals.push(nx, ny, nz);
+      colors.push(...s.tipC);
+    }
+  }
+
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geo;
+}
+
+/**
+ * ShaderMaterial for Ricardo Oliva Alonso Stylized Grass
+ * Uses flat face normals to produce distinct sunlit vs shaded facets,
+ * exactly reproducing the crunchy 3D diorama lawn aesthetic from KwKwddJ.
+ */
+function createRicardoGrassMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        time: { value: 0 },
+        sunDirection: { value: new THREE.Vector3(-40, 85, 35).normalize() },
+      },
+    ]),
+    vertexShader: /* glsl */ `
+      #include <fog_pars_vertex>
+      uniform float time;
+      varying vec3 vColor;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vColor = color;
+        vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+
+        // Subtle gentle breeze sway on the tips
+        float anchor = pow(clamp(position.y / 0.4, 0.0, 1.0), 1.5);
+        float sway = sin(time * 2.2 + worldPos.x * 0.45 + worldPos.z * 0.35) * 0.025 * anchor;
+
+        vec3 p = position;
+        p.x += sway;
+        p.z += sway * 0.5;
+
+        worldPos = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        vWorldNormal = normalize(mat3(modelMatrix * instanceMatrix) * normal);
+        vec4 mvPosition = viewMatrix * worldPos;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      #include <fog_pars_fragment>
+      uniform vec3 sunDirection;
+      varying vec3 vColor;
+      varying vec3 vWorldNormal;
+
+      void main() {
+        vec3 lightDir = normalize(sunDirection);
+        float sunDot = max(0.0, dot(vWorldNormal, lightDir));
+
+        // Faceted diorama lighting exactly like Ricardo Oliva Alonso
+        // Sunlit facet: bright golden lime (max rgb 200, 229, 154)
+        // Shaded facet: soft pastel green (avg rgb 140, 185, 105)
+        vec3 col = vColor;
+        if (sunDot > 0.42) {
+          col = col * vec3(1.15, 1.10, 0.95);
+        } else if (sunDot > 0.15) {
+          col = col * vec3(1.02, 1.02, 1.00);
+        } else {
+          col = col * vec3(0.85, 0.88, 0.92);
+        }
+
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }
+    `,
+    side: THREE.FrontSide,
+    fog: true,
+  });
+}
+
 export function createEnvironment(scene) {
   const envGroup = new THREE.Group();
   scene.add(envGroup);
@@ -580,6 +730,176 @@ export function createEnvironment(scene) {
   }
 
   // ==========================================================================
+  // 3. Ricardo Oliva Alonso Stylized 3D Grass & Bush Hedge (CodePen KwKwddJ)
+  // Pointed 3-sided low-poly triangular spikes catching faceted sunlight
+  // and puffy billowy spherical bushes along the wooden fence perimeter
+  // ==========================================================================
+  const bushGeo = new THREE.SphereGeometry(1.0, 9, 6);
+  const bushMat = createGhibliMaterial({
+    colors: ["#9dc882", "#6ea062", "#48783e", "#284e24"],
+    thresholds: [0.65, 0.35, -0.05],
+  });
+
+  const dummy = new THREE.Object3D();
+  let bSeed = 4091;
+  const bRnd = () => {
+    bSeed = (bSeed * 1664525 + 1013904223) % 4294967296;
+    return bSeed / 4294967296;
+  };
+
+  const bushInstances = [];
+  // Winding row of billowy bush spheres along the south wooden fence (z = 48.07)
+  for (let x = -28.0; x <= 34.0; x += 1.35) {
+    if (x > -26.5 && x < -21.3) continue; // Keep gate opening clear
+    const clusterZ = 48.07 + (bRnd() - 0.5) * 0.7;
+    const baseR = 0.55 + bRnd() * 0.35;
+    bushInstances.push({
+      x: x + (bRnd() - 0.5) * 0.4,
+      y: baseR * 0.65,
+      z: clusterZ,
+      scale: baseR,
+    });
+    if (bRnd() < 0.75) {
+      const flR = baseR * (0.65 + bRnd() * 0.3);
+      bushInstances.push({
+        x: x + (bRnd() < 0.5 ? -1 : 1) * (baseR * 0.6),
+        y: flR * 0.65,
+        z: clusterZ + (bRnd() - 0.5) * 0.5,
+        scale: flR,
+      });
+    }
+  }
+
+  const bushMesh = new THREE.InstancedMesh(bushGeo, bushMat, bushInstances.length);
+  bushMesh.receiveShadow = true;
+  for (let i = 0; i < bushInstances.length; i++) {
+    const b = bushInstances[i];
+    dummy.position.set(b.x, b.y - 0.06, b.z);
+    dummy.scale.set(b.scale, b.scale * 0.85, b.scale);
+    dummy.rotation.set((bRnd() - 0.5) * 0.2, bRnd() * Math.PI, (bRnd() - 0.5) * 0.2);
+    dummy.updateMatrix();
+    bushMesh.setMatrixAt(i, dummy.matrix);
+  }
+  bushMesh.instanceMatrix.needsUpdate = true;
+  groundGroup.add(bushMesh);
+
+  // 3B. Ricardo Oliva Alonso 3D Triangular Grass Spikes
+  const grassGeo = createRicardoGrassGeometry();
+  const grassMat = createRicardoGrassMaterial();
+  const tuftPositions = [];
+
+  let tSeed = 8274;
+  const tRnd = () => {
+    tSeed = (tSeed * 1664525 + 1013904223) % 4294967296;
+    return tSeed / 4294967296;
+  };
+
+  function distToRoad(px, pz) {
+    const x1 = -23.895, z1 = 48.07;
+    const x2 = -50.0, z2 = 120.0;
+    const dx = x2 - x1, dz = z2 - z1;
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (pz - z1) * dz) / (dx * dx + dz * dz || 1)));
+    return Math.hypot(px - (x1 + t * dx), pz - (z1 + t * dz));
+  }
+
+  // 1. Vast Foreground Meadow Belt south of the fence (z: 48.5 to 88.0, x: -55 to 55)
+  const fgXSteps = 70;
+  const fgZSteps = 65;
+  for (let ix = 0; ix < fgXSteps; ix++) {
+    for (let iz = 0; iz < fgZSteps; iz++) {
+      const fracX = (ix + tRnd() * 0.85) / fgXSteps;
+      const fracZ = (iz + tRnd() * 0.85) / fgZSteps;
+      const x = -55.0 + fracX * 110.0;
+      const z = 48.5 + fracZ * 39.5;
+      if (distToRoad(x, z) < 4.2) continue; // Keep access road clear
+
+      tuftPositions.push({
+        x,
+        z,
+        scale: 0.85 + tRnd() * 0.35,
+        rot: tRnd() * Math.PI * 2,
+      });
+    }
+  }
+
+  // 2. Inner Lawn Patches between sheds (mud courtyard is kept 100% clean)
+  const innerLawnPatches = [
+    { x: 0.6, z: 16.8, w: 24.0, d: 5.5 },   // Between Shed A and Shed B
+    { x: -0.2, z: -1.8, w: 22.0, d: 3.5 },  // Between Shed B and US A
+    { x: -1.7, z: -22.8, w: 20.0, d: 2.8 }, // Between US B and Shed D
+    { x: 20.0, z: 10.0, w: 10.0, d: 16.0 }, // East courtyard lawn patch
+  ];
+  for (const lp of innerLawnPatches) {
+    const rot = -0.13;
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    const count = Math.floor(lp.w * lp.d * 2.8);
+    for (let i = 0; i < count; i++) {
+      const lx = (tRnd() - 0.5) * (lp.w - 0.4);
+      const lz = (tRnd() - 0.5) * (lp.d - 0.4);
+      const wx = lp.x + lx * cosR - lz * sinR;
+      const wz = lp.z + lx * sinR + lz * cosR;
+      tuftPositions.push({
+        x: wx,
+        z: wz,
+        scale: 0.75 + tRnd() * 0.30,
+        rot: tRnd() * Math.PI * 2,
+      });
+    }
+  }
+
+  // 3. Along outer margins of perimeter fence rails (outside compound only)
+  const outerFencePerimeter = [
+    [-21.4, 48.07],
+    [34.5, 48.07],
+    [34.5, -53.0],
+    [-29.5, -53.0],
+    [-29.5, 48.07],
+    [-26.4, 48.07],
+  ];
+  for (let seg = 0; seg < outerFencePerimeter.length - 1; seg++) {
+    const p1 = outerFencePerimeter[seg];
+    const p2 = outerFencePerimeter[seg + 1];
+    const dx = p2[0] - p1[0];
+    const dz = p2[1] - p1[1];
+    const dist = Math.hypot(dx, dz);
+    const count = Math.floor(dist / 0.35);
+    const nx = -dz / dist;
+    const nz = dx / dist;
+
+    for (let i = 0; i < count; i++) {
+      const frac = (i + tRnd() * 0.7) / count;
+      const x = p1[0] + dx * frac;
+      const z = p1[1] + dz * frac;
+      const offset = 0.3 + tRnd() * 0.8;
+      const ox = x + nx * offset;
+      const oz = z + nz * offset;
+      if (distToRoad(ox, oz) < 3.8) continue;
+
+      tuftPositions.push({
+        x: ox,
+        z: oz,
+        scale: 0.8 + tRnd() * 0.35,
+        rot: tRnd() * Math.PI * 2,
+      });
+    }
+  }
+
+  const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, tuftPositions.length);
+  grassMesh.receiveShadow = true;
+  for (let i = 0; i < tuftPositions.length; i++) {
+    const tp = tuftPositions[i];
+    dummy.position.set(tp.x, -0.06, tp.z);
+    dummy.rotation.set(0, tp.rot, 0);
+    dummy.scale.set(tp.scale, tp.scale, tp.scale);
+    dummy.updateMatrix();
+    grassMesh.setMatrixAt(i, dummy.matrix);
+  }
+  grassMesh.instanceMatrix.needsUpdate = true;
+  groundGroup.add(grassMesh);
+
+
+  // ==========================================================================
   // 3. Ghibli 3D Distant Cumulus Clouds
   // Towering anime cumulus clouds along the distant horizon with slow drift
   // ==========================================================================
@@ -641,6 +961,7 @@ export function createEnvironment(scene) {
       forest = createForest(envGroup, exclusions, settings);
     },
     update(time, camera) {
+      if (grassMat && grassMat.uniforms.time) grassMat.uniforms.time.value = time;
       if (cloudsGroup) cloudsGroup.rotation.y = time * 0.002;
       if (forest) forest.update(time, camera);
     },
