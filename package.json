@@ -6,7 +6,7 @@
   "description": "Mobile-first Three.js farm CCTV planner with satellite imagery",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check dist/app.js && node --check dist/interiors.js && node --check dist/kitchen.js && node --check server.mjs"
+    "check": "node --check dist/app.js && node --check dist/interiors.js && node --check dist/kitchen.js && node --check dist/environment.js && node --check dist/tree-data.js && node --check server.mjs"
   },
   "engines": {
     "node": ">=18"

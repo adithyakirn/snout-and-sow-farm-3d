@@ -5,10 +5,11 @@ import { LineGeometry } from "./vendor/lines/LineGeometry.js";
 import { LineMaterial } from "./vendor/lines/LineMaterial.js";
 import { createInteriors } from "./interiors.js";
 import { createKitchenInterior } from "./kitchen.js";
+import { createEnvironment, createGhibliSky } from "./environment.js";
 const $ = (id) => document.getElementById(id);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#a7b6b2");
-scene.fog = new THREE.Fog("#a7b6b2", 700, 1800);
+scene.background = createGhibliSky();
+scene.fog = new THREE.Fog("#cce6f8", 220, 950);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 800 ? 1.5 : 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -56,9 +57,9 @@ function reset(top = false) {
   }
 }
 reset();
-scene.add(new THREE.HemisphereLight(0xc9eaff, 0x24342f, 2.1));
-const sun = new THREE.DirectionalLight(0xffefcd, 3);
-sun.position.set(-35, 80, 30);
+scene.add(new THREE.HemisphereLight(0xd4edff, 0x3a6034, 2.3));
+const sun = new THREE.DirectionalLight(0xfff5db, 3.2);
+sun.position.set(-40, 85, 35);
 sun.castShadow = true;
 const shadowSize = innerWidth < 800 ? 1024 : 2048;
 sun.shadow.mapSize.set(shadowSize, shadowSize);
@@ -84,6 +85,7 @@ const roofs = [],
 const mapScale = 0.159940235270572 * 0.5835943116518173;
 const satelliteGroup = new THREE.Group();
 scene.add(satelliteGroup);
+const environment = createEnvironment(scene);
 const entries = new Map();
 const mats = {
   wall: new THREE.MeshStandardMaterial({ color: 0x819a9d, roughness: 0.9 }),
@@ -93,7 +95,7 @@ const mats = {
     roughness: 0.65,
   }),
   trim: new THREE.MeshStandardMaterial({ color: 0x425966 }),
-  ground: new THREE.MeshStandardMaterial({ color: 0x182b32, roughness: 1 }),
+  ground: new THREE.MeshStandardMaterial({ color: 0x4e8d32, roughness: 1 }),
   dark: new THREE.MeshStandardMaterial({ color: 0x172c37 }),
   camera: new THREE.MeshStandardMaterial({ color: 0xf2f2e8 }),
   lens: new THREE.MeshStandardMaterial({
@@ -1012,16 +1014,25 @@ groundShadows.position.y = -0.04;
 groundShadows.receiveShadow = true;
 satelliteGroup.add(groundShadows);
 function updateMapStatus() {
-  $("map-status").textContent = failedTiles
-    ? "Some satellite tiles failed to load. Reload to retry."
-    : loadedTiles === tileCount
-      ? "Real satellite imagery · Map-calibrated metres"
-      : "Loading satellite imagery " + loadedTiles + "/" + tileCount;
+  if ($("ground-3d").checked || $("trees").checked) {
+    $("map-status").textContent =
+      "3D Forest & Terrain · " +
+      environment.treeCount +
+      " trees · Calibrated metres";
+  } else {
+    $("map-status").textContent = failedTiles
+      ? "Some satellite tiles failed to load. Reload to retry."
+      : loadedTiles === tileCount
+        ? "Real satellite imagery · Map-calibrated metres"
+        : "Loading satellite imagery " + loadedTiles + "/" + tileCount;
+  }
 }
 let selected = "overview",
   activePane = null,
   mapView = false;
 const layerIds = [
+  "trees",
+  "ground-3d",
   "satellite",
   "buildings",
   "roofs",
@@ -1068,6 +1079,8 @@ function closePane() {
     .forEach((b) => b.classList.remove("active"));
 }
 function applyLayers() {
+  environment.forestGroup.visible = $("trees").checked;
+  environment.groundGroup.visible = $("ground-3d").checked;
   satelliteGroup.visible = $("satellite").checked;
   grid.visible = $("grid").checked;
   for (const b of Object.values(buildings))
@@ -1099,6 +1112,7 @@ function applyLayers() {
     ).checked;
     r.materials.forEach((m) => (m.depthTest = !$("xray").checked));
   }
+  updateMapStatus();
   try {
     localStorage.setItem(
       "farm-atlas-layers",
@@ -1114,11 +1128,13 @@ try {
   for (const id of layerIds)
     if (typeof saved[id] === "boolean") $(id).checked = saved[id];
 } catch {}
-// Enable the expanded satellite environment once for this version.
+// Default to 3D Forest & Terrain environment version 3.
 try {
-  if (localStorage.getItem("farm-atlas-environment-version") !== "2") {
-    $("satellite").checked = true;
-    localStorage.setItem("farm-atlas-environment-version", "2");
+  if (localStorage.getItem("farm-atlas-environment-version") !== "3") {
+    $("satellite").checked = false;
+    $("trees").checked = true;
+    $("ground-3d").checked = true;
+    localStorage.setItem("farm-atlas-environment-version", "3");
   }
 } catch {}
 
@@ -1791,13 +1807,16 @@ function draw(frameTime = 0) {
   lastFrameTime = frameTime;
   if (
     $("animation").checked &&
-    (interiors.animalRoot.visible || kitchenInterior.peopleRoot.visible) &&
+    (interiors.animalRoot.visible ||
+      kitchenInterior.peopleRoot.visible ||
+      environment.forestGroup.visible) &&
     document.visibilityState !== "hidden"
   )
     animalTime += delta;
   if (frameTime - lastAnimalUpdate >= 33) {
     if (interiors.animalRoot.visible) interiors.update(animalTime);
     if (kitchenInterior.peopleRoot.visible) kitchenInterior.update(animalTime);
+    if (environment.forestGroup.visible) environment.update(animalTime);
     lastAnimalUpdate = frameTime;
   }
   if (inCameraView) {

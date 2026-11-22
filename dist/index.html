@@ -29,7 +29,12 @@
     ></main>
     <svg id="label-leaders" aria-hidden="true"></svg>
     <div id="labels"></div>
-    <div id="camera-viewport-hud" class="hidden" role="region" aria-label="Camera live viewport">
+    <div
+      id="camera-viewport-hud"
+      class="hidden"
+      role="region"
+      aria-label="Camera live viewport"
+    >
       <div class="cctv-top-bar">
         <div class="cctv-cam-info">
           <div class="cctv-title-row">
@@ -56,13 +61,37 @@
         <div class="cctv-crosshair"></div>
       </div>
       <div class="cctv-bottom-bar">
-        <button id="cctv-prev-cam" class="cctv-nav-btn" aria-label="Previous camera">◀ Prev</button>
+        <button
+          id="cctv-prev-cam"
+          class="cctv-nav-btn"
+          aria-label="Previous camera"
+        >
+          ◀ Prev
+        </button>
         <div class="cctv-cam-selector-wrapper">
           <select id="cctv-cam-select" aria-label="Select camera feed"></select>
         </div>
-        <button id="cctv-next-cam" class="cctv-nav-btn" aria-label="Next camera">Next ▶</button>
-        <button id="cctv-reset-angle" class="cctv-util-btn" title="Reset viewing angle">Reset Angle</button>
-        <button id="cctv-exit-btn" class="cctv-exit-btn" aria-label="Exit camera view">✕ Exit View</button>
+        <button
+          id="cctv-next-cam"
+          class="cctv-nav-btn"
+          aria-label="Next camera"
+        >
+          Next ▶
+        </button>
+        <button
+          id="cctv-reset-angle"
+          class="cctv-util-btn"
+          title="Reset viewing angle"
+        >
+          Reset Angle
+        </button>
+        <button
+          id="cctv-exit-btn"
+          class="cctv-exit-btn"
+          aria-label="Exit camera view"
+        >
+          ✕ Exit View
+        </button>
       </div>
     </div>
     <header>
@@ -151,11 +180,27 @@
 
             <label
               ><span
+                ><b>3D Forest & trees</b
+                ><small
+                  >1,500+ trees, palms & vegetation exact to site</small
+                ></span
+              ><input id="trees" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
+                ><b>3D Ground & compound</b
+                ><small
+                  >Dirt courtyard, paths, aprons, fence & gate</small
+                ></span
+              ><input id="ground-3d" type="checkbox" checked role="switch"
+            /></label>
+            <label
+              ><span
                 ><b>Satellite imagery</b
                 ><small
-                  >Full satellite ground and surrounding fields</small
+                  >Original satellite ground aerial photography</small
                 ></span
-              ><input id="satellite" type="checkbox" checked role="switch"
+              ><input id="satellite" type="checkbox" role="switch"
             /></label>
             <label
               ><span

@@ -31,7 +31,7 @@ A mobile-first 3D farm infrastructure and CCTV planning viewer built with **Thre
 
 ## Features
 
-- **Calibrated Satellite Ground Plane**: Rendered over Esri World Imagery (Web Mercator) with 9 high-res zoom-18 site tiles and 25 surrounding zoom-16 context tiles (~3 km span).
+- **3D Forest, Trees & Ground Terrain**: Replaces flat 2D satellite photo tiles with native Three.js 3D procedural terrain and over 1,500 individual 3D trees and coconut palms positioned exactly from high-resolution satellite imagery. Features a warm dirt farm yard, driveway avenues, concrete shed aprons, surrounding agricultural plots, a 3D perimeter fence with an iron entrance gate, and gentle wind breeze animations rendered via high-performance InstancedMesh (5 draw calls).
 - **12-Camera CCTV Network**: Interactive camera models with direction arrows, coordinates, connection highlights, and calculated cable route lengths.
 - **First-Person Camera Viewport**: Tap any camera to see its live lens perspective. Accurately simulates 2.8 mm wide-angle dome cameras (~103° HFOV) and 4.0 mm bullet cameras (~79° HFOV for G1, D2, and K2) with a live CCTV HUD, real-time timestamp, pan/tilt controls, digital zoom, and quick camera switching.
 - **Detailed Cable Routing**: Distinct visible roof switches, individual camera drops, inter-switch fibre links, and future expansion provisions.
@@ -184,7 +184,9 @@ snout-sow-farm/
 │   ├── app.js              # Three.js scene, map registration, cameras, cables, measurements
 │   ├── interiors.js        # Internal shed partitions, cage geometry, animated livestock
 │   ├── kitchen.js          # Kitchen room partitions, fixtures, animated personnel
-│   ├── tiles/              # Offline satellite imagery tiles
+│   ├── environment.js      # 3D procedural ground terrain, compound fence/gate, InstancedMesh forest
+│   ├── tree-data.js        # Exact satellite-derived coordinates and classifications for 1,500+ trees
+│   ├── tiles/              # Satellite imagery tiles (optional overlay)
 │   │   ├── *.jpg           # 9 zoom-18 tiles covering the farm core
 │   │   └── context/        # 25 zoom-16 tiles covering surrounding ~3 km area
 │   └── vendor/             # Bundled zero-dependency vendor files
