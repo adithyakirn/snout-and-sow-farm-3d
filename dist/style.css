@@ -208,6 +208,9 @@ header button {
   pointer-events: none;
   max-width: 70%;
 }
+#map-status:empty {
+  display: none;
+}
 .bottom-nav {
   position: fixed;
   bottom: calc(15px + env(safe-area-inset-bottom));

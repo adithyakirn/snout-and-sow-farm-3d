@@ -1188,10 +1188,7 @@ scene.add(groundShadows);
 groundShadows.position.y = 0.02;
 
 function updateMapStatus() {
-  $("map-status").textContent =
-    "3D Forest & Terrain · " +
-    (environment.forestGroup.visible ? "Ghibli style trees · " : "") +
-    "Calibrated metres";
+  $("map-status").textContent = "";
 }
 let selected = "overview",
   activePane = null,
