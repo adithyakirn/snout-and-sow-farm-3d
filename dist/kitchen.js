@@ -377,75 +377,75 @@ export function createKitchenInterior(kitchen) {
     head.position.y = 1.55;
     person.add(head);
 
-    // Rosy anime blush cheeks
+    // Rosy anime blush cheeks (positioned relative to head center)
     for (const side of [-1, 1]) {
       const blush = new THREE.Mesh(
         new THREE.SphereGeometry(0.04, 8, 6),
         animeBlush,
       );
-      blush.position.set(side * 0.11, 1.51, 0.12);
+      blush.position.set(side * 0.11, -0.04, 0.12);
       blush.scale.set(1, 0.7, 0.4);
       head.add(blush);
     }
 
-    // Expressive anime eyes with catchlights
+    // Expressive anime eyes with catchlights (relative to head center)
     for (const side of [-1, 1]) {
       const pupil = new THREE.Mesh(
         new THREE.SphereGeometry(0.022, 8, 8),
         animeEye,
       );
-      pupil.position.set(side * 0.075, 1.56, 0.14);
+      pupil.position.set(side * 0.075, 0.01, 0.14);
       head.add(pupil);
 
       const glint = new THREE.Mesh(
         new THREE.SphereGeometry(0.008, 6, 6),
         animeGlint,
       );
-      glint.position.set(side * 0.078 + 0.003, 1.568, 0.155);
+      glint.position.set(side * 0.078 + 0.003, 0.018, 0.155);
       head.add(glint);
     }
 
-    // Anime hair tufts
+    // Anime hair tufts (relative to head center)
     const bangs = new THREE.Mesh(
       new THREE.SphereGeometry(0.165, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6),
       hair,
     );
-    bangs.position.set(0, 1.57, 0.02);
+    bangs.position.set(0, 0.02, 0.02);
     head.add(bangs);
 
     if (isCook) {
-      // Classic Ghibli straw sun hat
+      // Classic Ghibli straw sun hat (worn snugly on head)
       const brim = new THREE.Mesh(
         new THREE.CylinderGeometry(0.28, 0.28, 0.025, 16),
         strawHat,
       );
-      brim.position.set(0, 1.69, 0);
+      brim.position.set(0, 0.13, 0);
       head.add(brim);
 
       const crown = new THREE.Mesh(
         new THREE.CylinderGeometry(0.17, 0.18, 0.12, 16),
         strawHat,
       );
-      crown.position.set(0, 1.76, 0);
+      crown.position.set(0, 0.20, 0);
       head.add(crown);
 
       const ribbon = new THREE.Mesh(
         new THREE.CylinderGeometry(0.175, 0.182, 0.035, 16),
         hatRibbon,
       );
-      ribbon.position.set(0, 1.72, 0);
+      ribbon.position.set(0, 0.16, 0);
       head.add(ribbon);
     } else {
-      // Ghibli newsboy work cap in warm rust
+      // Ghibli newsboy work cap in warm rust (worn snugly on head)
       const capCrown = new THREE.Mesh(
         new THREE.SphereGeometry(0.19, 12, 8),
         newsboyCap,
       );
       capCrown.scale.set(1.05, 0.75, 1.05);
-      capCrown.position.set(0, 1.68, -0.01);
+      capCrown.position.set(0, 0.11, -0.01);
       head.add(capCrown);
 
-      const visor = block(head, [0.22, 0.025, 0.14], [0, 1.66, 0.16], newsboyCap);
+      const visor = block(head, [0.22, 0.025, 0.14], [0, 0.09, 0.15], newsboyCap);
       visor.rotation.x = 0.18;
     }
 
