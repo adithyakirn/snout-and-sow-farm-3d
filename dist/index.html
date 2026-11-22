@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#101e23" />
     <meta
       name="description"
-      content="Explore the Snout & Sow farm CCTV plan on real satellite imagery. Interactive Three.js buildings, cameras and individual cable routes."
+      content="Explore the Snout & Sow farm CCTV plan in 3D. Interactive Three.js buildings, cameras, cable routes, and Ghibli-styled forest terrain."
     />
     <title>Snout & Sow — Farm atlas</title>
     <link rel="stylesheet" href="style.css" />
@@ -25,7 +25,7 @@
   <body>
     <main
       id="viewport"
-      aria-label="Interactive 3D satellite model of Snout and Sow farm"
+      aria-label="Interactive 3D model of Snout and Sow farm"
     ></main>
     <svg id="label-leaders" aria-hidden="true"></svg>
     <div id="labels"></div>
@@ -105,7 +105,7 @@
     <nav class="view-control" aria-label="Map view">
       <button id="perspective" class="active" aria-pressed="true">
         3D site</button
-      ><button id="top" aria-pressed="false">Satellite map</button
+      ><button id="top" aria-pressed="false">Plan view</button
       ><button id="interior-view">Inside</button>
     </nav>
     <div class="map-tools">
@@ -121,7 +121,7 @@
         <span id="north-arrow">↑</span>N
       </button>
     </div>
-    <div id="map-status" role="status">Loading satellite imagery…</div>
+    <div id="map-status" role="status">3D Forest & Terrain · Calibrated metres</div>
     <section id="panel" class="collapsed" aria-label="Map controls">
       <div id="sheet-head">
         <div>
@@ -196,14 +196,6 @@
             /></label>
             <label
               ><span
-                ><b>Satellite imagery</b
-                ><small
-                  >Original satellite ground aerial photography</small
-                ></span
-              ><input id="satellite" type="checkbox" role="switch"
-            /></label>
-            <label
-              ><span
                 ><b>3D buildings</b
                 ><small>3D shells, roof supports and shadows</small></span
               ><input id="buildings" type="checkbox" checked role="switch"
@@ -273,8 +265,7 @@
         <div id="measure-pane" class="pane hidden">
           <h3>Ground distance</h3>
           <p>
-            Tap two points in the satellite map. Distances use the imagery’s
-            geographic scale.
+            Tap two points in the map. Distances use calibrated metres scale.
           </p>
           <div id="measure-result" class="metric">
             Choose two points on the map.
@@ -403,7 +394,7 @@
             <p>
               Shed C, kitchen, network room and future shed footprints are
               indicative. Building shells and heights are illustrative. The
-              satellite surface is flat, with no surveyed elevation model.
+              ground surface is flat, with no surveyed elevation model.
               Building measurements are estimates.
             </p>
             <p>

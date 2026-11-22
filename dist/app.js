@@ -83,8 +83,6 @@ const roofs = [],
   futureObjects = [],
   lineMaterials = [];
 const mapScale = 0.159940235270572 * 0.5835943116518173;
-const satelliteGroup = new THREE.Group();
-scene.add(satelliteGroup);
 const environment = createEnvironment(scene);
 const entries = new Map();
 const mats = {
@@ -931,80 +929,6 @@ function coordinates(p) {
   };
 }
 const northDirection = mapToModel(0, -1).sub(mapToModel(0, 0)).normalize();
-let loadedTiles = 0,
-  failedTiles = 0;
-const tileCount = 34;
-const textureLoader = new THREE.TextureLoader();
-function loadSatelliteTile(url, u, v, pixelSpan, height) {
-  const corners = [
-    [u, v],
-    [u + pixelSpan, v],
-    [u + pixelSpan, v + pixelSpan],
-    [u, v + pixelSpan],
-  ].map(([x, y]) => {
-    const p = mapToModel(x, y);
-    p.y = height;
-    return p;
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(
-      corners.flatMap((p) => p.toArray()),
-      3,
-    ),
-  );
-  geometry.setAttribute(
-    "uv",
-    new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2),
-  );
-  geometry.setIndex([0, 2, 1, 0, 3, 2]);
-  geometry.computeVertexNormals();
-  textureLoader.load(
-    url,
-    (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = Math.min(
-        8,
-        renderer.capabilities.getMaxAnisotropy(),
-      );
-      const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-      });
-      satelliteGroup.add(new THREE.Mesh(geometry, material));
-      loadedTiles++;
-      updateMapStatus();
-    },
-    undefined,
-    () => {
-      failedTiles++;
-      updateMapStatus();
-    },
-  );
-}
-// Wider zoom-16 imagery fills the surrounding environment. The zoom-18 farm
-// imagery sits above it, retaining the original geographic registration.
-for (let x = 46626; x <= 46630; x++)
-  for (let y = 30521; y <= 30525; y++) {
-    loadSatelliteTile(
-      "./tiles/context/" + x + "_" + y + ".jpg",
-      (x * 4 - 186512) * 256,
-      (y * 4 - 122091) * 256,
-      1024,
-      -0.105,
-    );
-  }
-for (let dx = -1; dx <= 1; dx++)
-  for (let dy = -1; dy <= 1; dy++) {
-    loadSatelliteTile(
-      "./tiles/" + dx + "_" + dy + ".jpg",
-      (dx + 1) * 256,
-      (dy + 1) * 256,
-      256,
-      -0.08,
-    );
-  }
 const groundShadows = new THREE.Mesh(
   new THREE.PlaneGeometry(220, 220),
   new THREE.ShadowMaterial({ opacity: 0.25, depthWrite: false }),
@@ -1012,20 +936,13 @@ const groundShadows = new THREE.Mesh(
 groundShadows.rotation.x = -Math.PI / 2;
 groundShadows.position.y = -0.04;
 groundShadows.receiveShadow = true;
-satelliteGroup.add(groundShadows);
+environment.groundGroup.add(groundShadows);
+
 function updateMapStatus() {
-  if ($("ground-3d").checked || $("trees").checked) {
-    $("map-status").textContent =
-      "3D Forest & Terrain · " +
-      environment.treeCount +
-      " trees · Calibrated metres";
-  } else {
-    $("map-status").textContent = failedTiles
-      ? "Some satellite tiles failed to load. Reload to retry."
-      : loadedTiles === tileCount
-        ? "Real satellite imagery · Map-calibrated metres"
-        : "Loading satellite imagery " + loadedTiles + "/" + tileCount;
-  }
+  $("map-status").textContent =
+    "3D Forest & Terrain · " +
+    environment.treeCount +
+    " trees · Calibrated metres";
 }
 let selected = "overview",
   activePane = null,
@@ -1033,7 +950,6 @@ let selected = "overview",
 const layerIds = [
   "trees",
   "ground-3d",
-  "satellite",
   "buildings",
   "roofs",
   "camera-layer",
@@ -1081,7 +997,6 @@ function closePane() {
 function applyLayers() {
   environment.forestGroup.visible = $("trees").checked;
   environment.groundGroup.visible = $("ground-3d").checked;
-  satelliteGroup.visible = $("satellite").checked;
   grid.visible = $("grid").checked;
   for (const b of Object.values(buildings))
     b.group.visible = $("buildings").checked;
@@ -1128,13 +1043,12 @@ try {
   for (const id of layerIds)
     if (typeof saved[id] === "boolean") $(id).checked = saved[id];
 } catch {}
-// Default to 3D Forest & Terrain environment version 3.
+// Default to 3D Forest & Terrain environment version 4 (satellite completely removed).
 try {
-  if (localStorage.getItem("farm-atlas-environment-version") !== "3") {
-    $("satellite").checked = false;
+  if (localStorage.getItem("farm-atlas-environment-version") !== "4") {
     $("trees").checked = true;
     $("ground-3d").checked = true;
-    localStorage.setItem("farm-atlas-environment-version", "3");
+    localStorage.setItem("farm-atlas-environment-version", "4");
   }
 } catch {}
 
