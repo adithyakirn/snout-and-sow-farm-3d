@@ -31,14 +31,14 @@ A mobile-first 3D farm infrastructure and CCTV planning viewer built with **Thre
 
 ## Features
 
-- 🌍 **Calibrated Satellite Ground Plane**: Rendered over Esri World Imagery (Web Mercator) with 9 high-res zoom-18 site tiles and 25 surrounding zoom-16 context tiles (~3 km span).
-- 📹 **12-Camera CCTV Network**: Interactive camera models with direction arrows, coordinates, connection highlights, and calculated cable route lengths.
-- 🔌 **Detailed Cable Routing**: Distinct visible roof switches, individual camera drops, inter-switch fibre links, and future expansion provisions.
-- 🏢 **Interactive Building Shells**: Toggle between exterior overhead roofs and interior inspection mode ("Inside" view) for sheds and facilities.
-- 🐖 **Instanced Animated Livestock**: 3D animated pigs and chickens rendered using Three.js instanced meshes for fast 60 FPS mobile rendering.
-- 📏 **Real-Time Ground Measurement**: Two-point surface distance measurement tool in metres for on-site cable and clearance estimation.
-- 🎛️ **Granular Layer Controls**: Toggle satellite imagery, roofs, shells, cameras, viewing arrows, wiring types, labels, grid, and animals with auto-saved browser preferences.
-- ⚡ **Zero-Build & Zero-Dependency**: Pure vanilla ES modules—no bundlers (Webpack/Vite) or npm dependencies required to run.
+- **Calibrated Satellite Ground Plane**: Rendered over Esri World Imagery (Web Mercator) with 9 high-res zoom-18 site tiles and 25 surrounding zoom-16 context tiles (~3 km span).
+- **12-Camera CCTV Network**: Interactive camera models with direction arrows, coordinates, connection highlights, and calculated cable route lengths.
+- **Detailed Cable Routing**: Distinct visible roof switches, individual camera drops, inter-switch fibre links, and future expansion provisions.
+- **Interactive Building Shells**: Toggle between exterior overhead roofs and interior inspection mode ("Inside" view) for sheds and facilities.
+- **Instanced Animated Livestock**: 3D animated pigs and chickens rendered using Three.js instanced meshes for fast 60 FPS mobile rendering.
+- **Real-Time Ground Measurement**: Two-point surface distance measurement tool in metres for on-site cable and clearance estimation.
+- **Granular Layer Controls**: Toggle satellite imagery, roofs, shells, cameras, viewing arrows, wiring types, labels, grid, and animals with auto-saved browser preferences.
+- **Zero-Build & Zero-Dependency**: Pure vanilla ES modules—no bundlers (Webpack/Vite) or npm dependencies required to run.
 
 ---
 
@@ -52,8 +52,8 @@ A mobile-first 3D farm infrastructure and CCTV planning viewer built with **Thre
 
 1. Clone or download this repository:
    ```sh
-   git clone https://github.com/your-username/snout-sow-farm.git
-   cd snout-sow-farm
+   git clone https://github.com/adithyakirn/snout-and-sow-farm-3d.git
+   cd snout-and-sow-farm-3d
    ```
 
 2. Start the built-in HTTP server:
