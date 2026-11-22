@@ -403,14 +403,28 @@ export function createForest(parent, exclusions = {}, options = {}) {
     detail.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     group.add(base,trunk,detail); batches.push({list,base,trunk,detail});
   }
-  // Soft contact/canopy shade is a single instanced ground pass. This avoids
-  // rendering hundreds of alpha crowns into a shadow map on mobile.
+  // Soft painterly Ghibli canopy shade: soft translucent dappled tones aligned with sun direction (-40, 85, 35)
   const shadowCanvas=document.createElement('canvas'); shadowCanvas.width=128; shadowCanvas.height=128;
-  const ctx=shadowCanvas.getContext('2d'), grad=ctx.createRadialGradient(64,64,7,64,64,63);
-  grad.addColorStop(0,'rgba(16,35,25,0.38)'); grad.addColorStop(0.5,'rgba(16,35,25,0.22)'); grad.addColorStop(1,'rgba(16,35,25,0)'); ctx.fillStyle=grad; ctx.fillRect(0,0,128,128);
+  const ctx=shadowCanvas.getContext('2d'), grad=ctx.createRadialGradient(64,64,4,64,64,62);
+  grad.addColorStop(0,'rgba(24,52,36,0.16)');
+  grad.addColorStop(0.4,'rgba(30,62,42,0.10)');
+  grad.addColorStop(0.75,'rgba(36,70,48,0.03)');
+  grad.addColorStop(1,'rgba(36,70,48,0)');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,128,128);
   const shadowTexture=new THREE.CanvasTexture(shadowCanvas); shadowTexture.colorSpace=THREE.SRGBColorSpace;
   const shade=new THREE.InstancedMesh(new THREE.PlaneGeometry(2,2).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:shadowTexture,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1}),trees.length);
-  trees.forEach((t,i)=>{dummy.position.set(t.x+t.sy*2,0.015,t.z-t.sy*1.5);dummy.rotation.set(0,0,0);dummy.scale.set(t.radius*1.15,1,t.radius*0.8);dummy.updateMatrix();shade.setMatrixAt(i,dummy.matrix);});
+  trees.forEach((t,i)=>{
+    const isPalm = t.variant === 7;
+    // Align shadow offset with directional sun angle (-40, 85, 35) -> (+0.47, -0.41)
+    const h = t.sy * 3.8;
+    const offX = h * 0.47;
+    const offZ = h * -0.41;
+    dummy.position.set(t.x + offX, -0.052, t.z + offZ);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(isPalm ? t.radius * 0.95 : t.radius * 1.15, 1, isPalm ? t.radius * 0.95 : t.radius * 0.85);
+    dummy.updateMatrix();
+    shade.setMatrixAt(i, dummy.matrix);
+  });
   group.add(shade);
   let quality='balanced', lastLOD=-Infinity, lastFov=0, lastAspect=0;
   const previousCamera = new THREE.Vector3(Infinity,Infinity,Infinity);

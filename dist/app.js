@@ -66,14 +66,15 @@ sun.castShadow = true;
 const shadowSize = innerWidth < 800 ? 1024 : 2048;
 sun.shadow.mapSize.set(shadowSize, shadowSize);
 Object.assign(sun.shadow.camera, {
-  left: -80,
-  right: 80,
-  top: 90,
-  bottom: -90,
+  left: -110,
+  right: 110,
+  top: 115,
+  bottom: -115,
   near: 1,
-  far: 220,
+  far: 260,
 });
-sun.shadow.bias = -0.0005;
+sun.shadow.bias = -0.0003;
+sun.shadow.normalBias = 0.02;
 scene.add(sun);
 const roofs = [],
   labels = [],
@@ -112,7 +113,8 @@ function box(w, h, d, x, y, z, mat, parent = scene) {
   parent.add(m);
   return m;
 }
-box(4000, 0.35, 4000, 0, -0.3, 0, mats.ground);
+const groundBaseBox = box(4000, 0.35, 4000, 0, -0.3, 0, mats.ground);
+groundBaseBox.castShadow = false;
 const grid = new THREE.GridHelper(400, 80, 0x3e5963, 0x253e48);
 grid.position.y = 0.01;
 grid.visible = false;
@@ -1182,10 +1184,7 @@ const groundShadows = new THREE.Mesh(
   new THREE.ShadowMaterial({ opacity: 0.25, depthWrite: false }),
 );
 groundShadows.rotation.x = -Math.PI / 2;
-groundShadows.position.y = -0.04;
-groundShadows.receiveShadow = true;
-scene.add(groundShadows);
-groundShadows.position.y = 0.02;
+groundShadows.visible = false;
 
 function updateMapStatus() {
   $("map-status").textContent = "";
